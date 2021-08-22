@@ -1,7 +1,7 @@
 /**
  * Written by gheskett (ArcticJaguar725)
  *
- * This is a command line tool designed to generate files required for emulation of streamed audio with Super Mario 64.
+ * This is a command line tool designed to generate files required for emulation of streamed audio within Super Mario 64.
  * STRM64 is compatible with any multichannel audio file up to 16 channels.
  *
  */

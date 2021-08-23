@@ -4,8 +4,10 @@ project(STRM64)
 
 add_compile_options(-Wall -g -O3 -march=native -DNDEBUG)
 
-include_directories(include)
-include_directories(library/include)
+include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(${PROJECT_SOURCE_DIR}/library/vgmstream)
+
+add_subdirectory("library/vgmstream")
 
 set (CMAKE_CXX_STANDARD 17)
 
@@ -18,13 +20,3 @@ src/stream.cpp
 
 add_executable(STRM64
 ${SRC_FILES})
-
-if(UNIX)
-	target_link_libraries(STRM64 "${PROJECT_SOURCE_DIR}/library/lib/libvgmstream.a")
-else()
-	target_link_libraries(STRM64 "${PROJECT_SOURCE_DIR}/library/windows/libvgmstream.lib")
-	add_custom_command(TARGET STRM64 POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"${PROJECT_SOURCE_DIR}/library/windows/in_vgmstream.dll"
-		$<TARGET_FILE_DIR:STRM64>)
-endif()

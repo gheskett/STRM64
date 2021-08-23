@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <vgmstream.h>
-
 #include "main.hpp"
 #include "stream.hpp"
 #include "bswp.hpp"
@@ -11,18 +9,12 @@ using namespace std;
 
 
 // Override parameters
-static bool ovrdForceVgmstream = false;
 static int64_t ovrdSampleRate = -1;
 static int64_t ovrdEnableLoop = -1;
 static int64_t ovrdLoopStartSamples = -1;
 static int64_t ovrdLoopEndSamples = -1;
 static int64_t ovrdLoopStartMicro = -1;
 static int64_t ovrdLoopEndMicro = -1;
-
-
-void set_force_vgmstream() {
-	ovrdForceVgmstream = true;
-}
 
 void set_sample_rate(int64_t sampleRate) {
 	if (sampleRate <= 0) {
@@ -80,4 +72,10 @@ void set_loop_end_microseconds(int64_t microseconds) {
 
 	ovrdLoopEndMicro = microseconds;
 	ovrdLoopEndSamples = -1;
+}
+
+int generate_new_streams(VGMSTREAM *inFileProperties, uint16_t gInstFlags) {
+	// TODO
+
+	return 0;
 }

@@ -17,8 +17,11 @@ using namespace std;
 #define ABS_PTR_SIZE 0x03
 
 
+static bool gIsMono = false;
 static int8_t gMuteScale = MUTE_SCALE_DEFAULT;
 static uint8_t gMasterVolume = MASTER_VOLUME_DEFAULT;
+
+static string warnings = "";
 
 
 SEQHeader::SEQHeader(uint16_t instFlags, uint8_t numChannels) {
@@ -73,6 +76,10 @@ SEQFile::~SEQFile() {
 	delete[] chnHeader;
 }
 
+
+void seq_set_mono() {
+	gIsMono = true;
+}
 
 void seq_set_mute_scale(int64_t muteScale) {
 	if (muteScale < -128 || muteScale > 255) {
@@ -177,8 +184,8 @@ void SEQHeader::write_seq_header(FILE *seqFile) {
 
 	// If these values don't match, then something is wrong!
 	if (seqHeaderSize != headerPtr) {
-		printf("FATAL WARNING! Precalculated sequence header size does not match output! Your output sequence may not work!\n");
-		printf("EXPECTED: %u bytes, ACTUAL: %zu bytes\n", seqHeaderSize, headerPtr);
+		warnings += "FATAL WARNING! Precalculated sequence header size does not match output! Your output sequence may not work!\n";
+		warnings += "EXPECTED: " + to_string(seqHeaderSize) + " bytes, ACTUAL: " + to_string(headerPtr) + " bytes\n";
 	}
 
 	// Write sequence header to file
@@ -237,8 +244,8 @@ void CHNHeader::write_chn_header(FILE *seqFile, uint8_t channelCount) {
 
 	// If these values don't match, then something is wrong!
 	if (CHN_HEADER_SIZE != headerPtr) {
-		printf("FATAL WARNING! Precalculated channel header size does not match output! Your output sequence may not work!\n");
-		printf("EXPECTED: %u bytes, ACTUAL: %zu bytes\n", CHN_HEADER_SIZE, headerPtr);
+		warnings += "FATAL WARNING! Precalculated channel header size does not match output! Your output sequence may not work!\n";
+		warnings += "EXPECTED: " + to_string(CHN_HEADER_SIZE) + " bytes, ACTUAL: " + to_string(headerPtr) + " bytes\n";
 	}
 
 	// Write sequence header to file
@@ -271,8 +278,8 @@ void SEQFile::write_trk_header(FILE *seqFile) {
 
 	// If these values don't match, then something is wrong!
 	if (TRK_HEADER_SIZE != dataPtr) {
-		printf("FATAL WARNING! Precalculated track data size does not match output! Your output sequence may not work!\n");
-		printf("EXPECTED: %u bytes, ACTUAL: %zu bytes\n", TRK_HEADER_SIZE, dataPtr);
+		warnings += "FATAL WARNING! Precalculated track data size does not match output! Your output sequence may not work!\n";
+		warnings += "EXPECTED: " + to_string(TRK_HEADER_SIZE) + " bytes, ACTUAL: " + to_string(dataPtr) + " bytes\n";
 	}
 
 	// Write track data to file
@@ -285,11 +292,15 @@ void SEQFile::write_trk_header(FILE *seqFile) {
 int SEQFile::write_sequence() {
 	FILE *seqFile;
 
+	printf("Generating sequence file...");
+
 	seqFile = fopen(("XX_" + this->filename + ".m64").c_str(), "wb");
 	if (seqFile == NULL) {
-		printf("ERROR: Could not open %s for writing!\n", this->filename.c_str());
+		printf("...FAILED!\nERROR: Could not open %s for writing!\n", this->filename.c_str());
 		return 2;
 	}
+	
+	warnings = "";
 
 	this->seqhead->write_seq_header(seqFile);
 
@@ -300,6 +311,9 @@ int SEQFile::write_sequence() {
 	write_trk_header(seqFile);
 
 	fclose(seqFile);
+
+	printf("...DONE!\n");
+	printf(warnings.c_str());
 
 	return 0;
 }

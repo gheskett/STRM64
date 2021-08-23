@@ -19,16 +19,18 @@ OPTIONAL ARGUMENTS
 -e [loop end sample / total samples]       (default: number of samples in source file)
 -f [loop end in microseconds / total time] (default: length of source audio)
 -v [master volume of sequence]             (default: 127)
--m [mute scale of sequence]                (default: 63)
--x                                         (don't generate sequence file)
--y                                         (don't generate soundbank file)
+-c [mute scale of sequence]                (default: 63)
+-m                                         (set all sequence channels to mono)
+-x                                         (don't generate stream files)
+-y                                         (don't generate sequence file)
+-z                                         (don't generate soundbank file)
 -h                                         (show help text)
 ```
 
 USAGE EXAMPLES
 ```
 STRM64 inputfile.wav -o outfiles -s 158462 -e 7485124
-STRM64 "spaces not recommended.wav" -l true -f 95000000
+STRM64 "spaces not recommended.wav" -l 1 -f 95000000
 STRM64 inputfile.brstm -l false -e 0x10000
 ```
 

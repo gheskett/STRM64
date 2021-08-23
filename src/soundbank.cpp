@@ -75,9 +75,11 @@ string generate_instrument_strings(string bankStr, string filename, uint16_t ins
 int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels) {
 	FILE *seqBank;
 
+	printf("Generating soundbank file...");
+
 	seqBank = fopen(("XX_" + filename + ".json").c_str(), "wb");
 	if (seqBank == NULL) {
-		printf("ERROR: Could not open %s for writing!\n", filename.c_str());
+		printf("...FAILED!\nERROR: Could not open %s for writing!\n", filename.c_str());
 		return 2;
 	}
 
@@ -87,6 +89,8 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 	fwrite(bankStr.c_str(), 1, bankStr.length(), seqBank); // Not using fprintf here to avoid carriage returns on Windows
 
 	fclose(seqBank);
+
+	printf("...DONE!\n");
 
 	return 0;
 }

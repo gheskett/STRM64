@@ -34,6 +34,7 @@
 # VS stuff
 ipch
 .vs
+.vscode
 *.opensdf
 *.pdb
 *.sdf
@@ -68,3 +69,8 @@ desktop.ini
 /*.vcxproj
 /*.vcxproj.filters
 /*.sln
+
+# Exceptions
+!/library/**/*.dll
+!/library/**/*.lib
+!/library/**/*.a

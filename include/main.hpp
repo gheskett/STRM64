@@ -10,5 +10,6 @@
 #define NUM_CHANNELS_MAX (sizeof(uint16_t) * 8)
 
 void print_param_warning(std::string param);
+void print_header_info(bool isStreamGeneration, uint32_t fileSize);
 
 #endif

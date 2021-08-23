@@ -1,7 +1,9 @@
 #ifndef STREAM_HPP
 #define STREAM_HPP
 
-void set_force_vgmstream();
+#include "vgmstream.h"
+
+int generate_new_streams(VGMSTREAM *inFileProperties, uint16_t gInstFlags);
 void set_sample_rate(int64_t sampleRate);
 void set_enable_loop(int64_t isLoopingEnabled);
 void set_loop_start_samples(int64_t samples);

@@ -11,7 +11,6 @@
  *
  * OPTIONAL ARGUMENTS
  *	-o [output filenames]                      (default: same as input, not including extension)
- *	-c                                         (force vgmstream conversion)
  *	-r [sample rate]                           (default: same as source file (this does NOT resample the audio!))
  *	-l [enable/disable loop]                   (default: either value in source audio or false)
  *	-s [loop start sample]                     (default: either value in source audio or 0)
@@ -19,14 +18,16 @@
  *	-e [loop end sample / total samples]       (default: number of samples in source file)
  *	-f [loop end in microseconds / total time] (default: length of source audio)
  *	-v [master volume of sequence]             (default: 127)
- *	-m [mute scale of sequence]                (default: 63)
- *	-x                                         (don't generate sequence file)
- *	-y                                         (don't generate soundbank file)
+ *	-c [mute scale of sequence]                (default: 63)
+ *	-m                                         (set all sequence channels to mono)
+ *	-x                                         (don't generate stream files)
+ *	-y                                         (don't generate sequence file)
+ *	-z                                         (don't generate soundbank file)
  *	-h                                         (show help text)
  *
  * USAGE EXAMPLES
  *	STRM64 inputfile.wav -o outfiles -s 158462 -e 7485124
- *	STRM64 "spaces not recommended.wav" -l true -f 95000000
+ *	STRM64 "spaces not recommended.wav" -l 1 -f 95000000
  *  STRM64 inputfile.brstm -l false -e 0x10000
  *
  * Note: This program works with WAV files (.wav) encoded with 16-bit PCM. If the source file is anything other than a WAV file, STRM64 will attempt to make a separate conversion with the vgmstream library, if it can.
@@ -37,6 +38,8 @@
 #include <stdlib.h>
 #include <vector>
 #include <algorithm>
+
+#include "vgmstream.h"
 
 #include "main.hpp"
 #include "stream.hpp"
@@ -51,10 +54,13 @@ vector <string> cmdArgs;
 string newFilename;
 bool customNewFilename = false;
 
+bool generateStreams = true;
 bool generateSequence = true;
 bool generateSoundbank = true;
 
 uint16_t gInstFlags = 0x0000;
+
+VGMSTREAM *inFileProperties;
 
 void printHelp() {
 	string print = "\n"
@@ -62,7 +68,6 @@ void printHelp() {
 		"\n"
 		"OPTIONAL ARGUMENTS\n"
 		"    -o [output file]                           (default: same as input, not including extension)\n"
-		"    -c                                         (force vgmstream conversion)\n"
 		"    -r [sample rate]                           (default: same as source file (this does NOT resample the audio!))\n"
 		"    -l [enable/disable loop]                   (default: value in source audio or false)\n"
 		"    -s [loop start sample]                     (default: value in source audio or 0)\n"
@@ -70,9 +75,11 @@ void printHelp() {
 		"    -e [loop end sample / total samples]       (default: number of samples in source file)\n"
 		"    -f [loop end in microseconds / total time] (default: length of source audio)\n"
 		"    -v [master volume of sequence]             (default: 127)\n"
-		"    -m [mute scale of sequence]                (default: 63)\n"
-        "    -x                                         (don't generate sequence file)\n"
-        "    -y                                         (don't generate soundbank file)\n"
+		"    -c [mute scale of sequence]                (default: 63)\n"
+		"    -m                                         (set all sequence channels to mono)\n"
+        "    -x                                         (don't generate stream files)\n"
+        "    -y                                         (don't generate sequence file)\n"
+        "    -z                                         (don't generate soundbank file)\n"
 		"    -h                                         (show help text)\n"
 		"\n"
 		"USAGE EXAMPLES\n"
@@ -145,13 +152,16 @@ int parse_input_arguments() {
 
 		// Single value arguments
 		switch (argVal) {
-		case 'c':
-			set_force_vgmstream();
+		case 'm':
+			seq_set_mono();
 			continue;
 		case 'x':
-			generateSequence = false;
+			generateStreams = false;
 			continue;
 		case 'y':
+			generateSequence = false;
+			continue;
+		case 'z':
 			generateSoundbank = false;
 			continue;
 		case 'h':
@@ -212,7 +222,7 @@ int parse_input_arguments() {
 		case 'v':
 			seq_set_master_volume(parse_string_to_number(arg));
 			break;
-		case 'm':
+		case 'c':
 			seq_set_mute_scale(parse_string_to_number(arg));
 			break;
 		default:
@@ -224,6 +234,93 @@ int parse_input_arguments() {
 		printHelp();
 
 	return 0;
+}
+
+int get_vgmstream_properties(const char *inFilename) {
+	inFileProperties = init_vgmstream(inFilename);
+	printf("Opening %s for reading...", inFilename);
+
+	if (!inFileProperties) {
+		FILE *invalidFile = fopen(inFilename, "r");
+		if (invalidFile == NULL) {
+			printf("...FAILED!\nERROR: Input file cannot be found or opened!\n");
+			return 3;
+		}
+		fclose(invalidFile);
+
+		printf("...FAILED!\nERROR: Input file is not a valid audio file!\nIf you believe this is a fluke, please make sure you have the proper audio libraries installed.\n");
+		return 4;
+	}
+
+	if (inFileProperties->channels <= 0) {
+		printf("...FAILED!\nERROR: Audio cannot have less than 1 audio channel!\nCONTAINS: %d channels\n", inFileProperties->channels);
+		close_vgmstream(inFileProperties);
+		return 5;
+	}
+
+	if (inFileProperties->channels > VGMSTREAM_MAX_CHANNELS) {
+		printf("...FAILED!\nERROR: Audio file exceeds maximum of %d channels!\nCONTAINS: %d channels\n", NUM_CHANNELS_MAX, inFileProperties->channels);
+		close_vgmstream(inFileProperties);
+		return 6;
+	}
+
+	// Currently using bitflags to represent channels serves no purpose, but it may be easier to automate for decomp soundbank optimization in the future.
+	for (int i = 0; i < inFileProperties->channels; i++)
+		gInstFlags |= (1 << i);
+
+	printf("...SUCCESS!\n");
+
+	return 0;
+}
+
+string samples_to_us_print(uint64_t sample_offset) {
+	uint64_t convTime = (uint64_t) (((long double) sample_offset / (long double) inFileProperties->sample_rate) * 1000000.0 + 0.5);
+
+	char buf[64];
+	sprintf(buf, "%d:%d:%02d.%06d",
+		(int) (convTime / 3600000000),
+		(int) (convTime / 60000000) % 60,
+		(int) (convTime / 1000000) % 3600,
+		(int) (convTime % 1000000));
+
+	string ret = buf;
+	return ret;
+}
+
+void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
+	printf("\n");
+
+	if (!isStreamGeneration) {
+		printf("  Output Audio File Size(s): %u bytes\n", fileSize);
+
+		printf("  Sample rate: %d Hz", inFileProperties->sample_rate);
+		if (inFileProperties->sample_rate > 32000)
+			printf(" (Downsampling recommended!)");
+		printf("\n");
+
+		printf("  Is Looped: ", inFileProperties->loop_flag);
+		if (inFileProperties->loop_flag) {
+			printf("true\n");
+
+			printf("  Starting Loop Point: %d Samples (Time: %s)\n", inFileProperties->loop_start_sample,
+				samples_to_us_print(inFileProperties->loop_start_sample).c_str());
+		}
+		else {
+			printf("false\n");
+		}
+
+		printf("  End of Stream: %d Samples (Time: %s)\n", inFileProperties->num_samples,
+			samples_to_us_print(inFileProperties->num_samples).c_str());
+	}
+
+	printf("  Number Of Channels: %d", inFileProperties->channels);
+	if (inFileProperties->channels == 1)
+		printf(" (mono)");
+	else if (inFileProperties->channels == 2)
+		printf(" (stereo)");
+	printf("\n");
+
+	printf("\n");
 }
 
 int main(int argc, char **argv) {
@@ -251,14 +348,26 @@ int main(int argc, char **argv) {
 	if (!customNewFilename)
 		newFilename = strip_extension(newFilename);
 
-	// TODO: stream.cpp time!
-	// TODO: set ret variable for generation calls; don't proceed if it's not set to 0
+	ret = get_vgmstream_properties(argv[1]);
+	if (ret) {
+		printHelp();
+		return ret;
+	}
 
-	if (generateSequence && gInstFlags)
-		generate_new_sequence(newFilename, gInstFlags);
+	if (generateStreams && !ret) {
+		ret = generate_new_streams(inFileProperties, gInstFlags);
+	}
+	else if (!ret) {
+		print_header_info(false, 0);
+	}
 
-	if (generateSoundbank && gInstFlags)
-		generate_new_soundbank(newFilename, gInstFlags);
+	if (generateSequence && !ret)
+		ret = generate_new_sequence(newFilename, gInstFlags);
 
-	return 0;
+	if (generateSoundbank && !ret)
+		ret = generate_new_soundbank(newFilename, gInstFlags);
+
+	close_vgmstream(inFileProperties);
+
+	return ret;
 }

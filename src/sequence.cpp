@@ -39,6 +39,10 @@ CHNHeader::CHNHeader(uint8_t channelIndex, uint8_t instId, uint8_t numChannels) 
 	instrument = instId;
 	
 	// TODO: make channel panning overrideable
+	if (gIsMono) {
+		pan = 0x3F;
+	}
+	else {
 	if (channelIndex % 2) { // right channel
 		pan = 0x7F;
 	}
@@ -47,6 +51,7 @@ CHNHeader::CHNHeader(uint8_t channelIndex, uint8_t instId, uint8_t numChannels) 
 			pan = 0x3F;
 		else // left channel
 			pan = 0x00;
+	}
 	}
 }
 CHNHeader::~CHNHeader() {
@@ -299,7 +304,7 @@ int SEQFile::write_sequence() {
 		printf("...FAILED!\nERROR: Could not open %s for writing!\n", this->filename.c_str());
 		return 2;
 	}
-	
+
 	warnings = "";
 
 	this->seqhead->write_seq_header(seqFile);

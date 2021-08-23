@@ -53,6 +53,7 @@ vector <string> cmdArgs;
 
 string newFilename;
 bool customNewFilename = false;
+bool forcedMono = false;
 
 bool generateStreams = true;
 bool generateSequence = true;
@@ -154,6 +155,7 @@ int parse_input_arguments() {
 		switch (argVal) {
 		case 'm':
 			seq_set_mono();
+			forcedMono = true;
 			continue;
 		case 'x':
 			generateStreams = false;
@@ -316,7 +318,7 @@ void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
 	printf("  Number Of Channels: %d", inFileProperties->channels);
 	if (inFileProperties->channels == 1)
 		printf(" (mono)");
-	else if (inFileProperties->channels == 2)
+	else if (inFileProperties->channels == 2 && !forcedMono)
 		printf(" (stereo)");
 	printf("\n");
 

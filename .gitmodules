@@ -1,3 +1,0 @@
-[submodule "library/vgmstream"]
-	path = library/vgmstream
-	url = git@github.com:vgmstream/vgmstream.git

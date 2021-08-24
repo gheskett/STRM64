@@ -39,8 +39,10 @@
 #include <vector>
 #include <algorithm>
 
+extern "C" {
 #include "vgmstream.h"
-
+}
+		
 #include "main.hpp"
 #include "stream.hpp"
 #include "sequence.hpp"

@@ -1,8 +1,10 @@
 #ifndef STREAM_HPP
 #define STREAM_HPP
 
+extern "C" {
 #include "vgmstream.h"
-
+}
+		
 int generate_new_streams(VGMSTREAM *inFileProperties, uint16_t gInstFlags);
 void set_sample_rate(int64_t sampleRate);
 void set_enable_loop(int64_t isLoopingEnabled);

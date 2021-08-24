@@ -30,7 +30,7 @@
  *	STRM64 "spaces not recommended.wav" -l 1 -f 95000000
  *  STRM64 inputfile.brstm -l false -e 0x10000
  *
- * Note: This program works with WAV files (.wav) encoded with 16-bit PCM. If the source file is anything other than a WAV file, STRM64 will attempt to make a separate conversion with the vgmstream library, if it can.
+ * Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.
  *
  */
 
@@ -90,7 +90,9 @@ void printHelp() {
 		"    STRM64 \"spaces not recommended.wav\" -l 1 -f 95000000\n"
 		"    STRM64 inputfile.brstm -l false -e 0x10000\n"
 		"\n"
-		"Note: This program works with WAV files (.wav) encoded with 16-bit PCM. If the source file is anything other than a WAV file, STRM64 will attempt to make a separate conversion with the vgmstream library, if it can.\n";
+		"Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.\n";
+
+	printf("%s", print.c_str());
 }
 
 void print_param_warning(string param) {
@@ -263,7 +265,7 @@ int get_vgmstream_properties(const char *inFilename) {
 	}
 
 	if (inFileProperties->channels > VGMSTREAM_MAX_CHANNELS) {
-		printf("...FAILED!\nERROR: Audio file exceeds maximum of %d channels!\nCONTAINS: %d channels\n", NUM_CHANNELS_MAX, inFileProperties->channels);
+		printf("...FAILED!\nERROR: Audio file exceeds maximum of %d channels!\nCONTAINS: %d channels\n", (int) NUM_CHANNELS_MAX, inFileProperties->channels);
 		close_vgmstream(inFileProperties);
 		return 6;
 	}
@@ -302,7 +304,7 @@ void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
 			printf(" (Downsampling recommended!)");
 		printf("\n");
 
-		printf("  Is Looped: ", inFileProperties->loop_flag);
+		printf("  Is Looped: ");
 		if (inFileProperties->loop_flag) {
 			printf("true\n");
 

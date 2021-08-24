@@ -19,12 +19,12 @@ src/stream.cpp
 add_executable(STRM64
 ${SRC_FILES})
 
-if(UNIX)
-	target_link_libraries(STRM64 "${PROJECT_SOURCE_DIR}/library/vgmstream/lib/libvgmstream.a")
-else()
+if(WIN32)
 	target_link_libraries(STRM64 "${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libvgmstream.lib")
 	add_custom_command(TARGET STRM64 POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
-		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows"
+		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/ext_libs"
 		$<TARGET_FILE_DIR:STRM64>)
+else()
+	target_link_libraries(STRM64 "${PROJECT_SOURCE_DIR}/library/vgmstream/lib/libvgmstream.a")
 endif()

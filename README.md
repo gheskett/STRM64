@@ -34,4 +34,4 @@ STRM64 "spaces not recommended.wav" -l 1 -f 95000000
 STRM64 inputfile.brstm -l false -e 0x10000
 ```
 
-Note: This program works with WAV files (.wav) encoded with 16-bit PCM. If the source file is anything other than a WAV file, STRM64 will attempt to make a separate conversion with the vgmstream library, if it can.
+Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.

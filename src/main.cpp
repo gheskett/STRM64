@@ -64,6 +64,7 @@ bool generateSoundbank = true;
 uint16_t gInstFlags = 0x0000;
 
 VGMSTREAM *inFileProperties;
+VGMSTREAM *inFilePropertiess;
 
 void printHelp() {
 	string print = "\n"
@@ -255,6 +256,7 @@ int get_vgmstream_properties(const char *inFilename) {
 		fclose(invalidFile);
 
 		printf("...FAILED!\nERROR: Input file is not a valid audio file!\nIf you believe this is a fluke, please make sure you have the proper audio libraries installed.\n");
+		printf("Alternatively, you can convert the input file to WAV separately and try again.\n");
 		return 4;
 	}
 
@@ -297,29 +299,29 @@ void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
 	printf("\n");
 
 	if (!isStreamGeneration) {
-		printf("  Output Audio File Size(s): %u bytes\n", fileSize);
+		printf("    Output Audio File Size(s): %u bytes\n", fileSize);
 
-		printf("  Sample rate: %d Hz", inFileProperties->sample_rate);
+		printf("    Sample rate: %d Hz", inFileProperties->sample_rate);
 		if (inFileProperties->sample_rate > 32000)
 			printf(" (Downsampling recommended!)");
 		printf("\n");
 
-		printf("  Is Looped: ");
+		printf("    Is Looped: ");
 		if (inFileProperties->loop_flag) {
 			printf("true\n");
 
-			printf("  Starting Loop Point: %d Samples (Time: %s)\n", inFileProperties->loop_start_sample,
+			printf("    Starting Loop Point: %d Samples (Time: %s)\n", inFileProperties->loop_start_sample,
 				samples_to_us_print(inFileProperties->loop_start_sample).c_str());
 		}
 		else {
 			printf("false\n");
 		}
 
-		printf("  End of Stream: %d Samples (Time: %s)\n", inFileProperties->num_samples,
+		printf("    End of Stream: %d Samples (Time: %s)\n", inFileProperties->num_samples,
 			samples_to_us_print(inFileProperties->num_samples).c_str());
 	}
 
-	printf("  Number Of Channels: %d", inFileProperties->channels);
+	printf("    Number Of Channels: %d", inFileProperties->channels);
 	if (inFileProperties->channels == 1)
 		printf(" (mono)");
 	else if (inFileProperties->channels == 2 && !forcedMono)

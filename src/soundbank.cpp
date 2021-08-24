@@ -77,7 +77,14 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 
 	printf("Generating soundbank file...");
 
-	seqBank = fopen(("XX_" + filename + ".json").c_str(), "wb");
+	string tmpFilename = filename;
+	size_t slash = tmpFilename.find_last_of("/\\");
+	if (slash == string::npos)
+		tmpFilename = "XX_" + tmpFilename + ".m64";
+	else
+		tmpFilename = tmpFilename.substr(0, slash+1) + "XX_" + tmpFilename.substr(slash+1) + ".m64";
+
+	seqBank = fopen(tmpFilename.c_str(), "wb");
 	if (seqBank == NULL) {
 		printf("...FAILED!\nERROR: Could not open %s for writing!\n", filename.c_str());
 		return 2;

@@ -299,7 +299,14 @@ int SEQFile::write_sequence() {
 
 	printf("Generating sequence file...");
 
-	seqFile = fopen(("XX_" + this->filename + ".m64").c_str(), "wb");
+	string tmpFilename = this->filename;
+	size_t slash = tmpFilename.find_last_of("/\\");
+	if (slash == string::npos)
+		tmpFilename = "XX_" + tmpFilename + ".m64";
+	else
+		tmpFilename = tmpFilename.substr(0, slash+1) + "XX_" + tmpFilename.substr(slash+1) + ".m64";
+
+	seqFile = fopen(tmpFilename.c_str(), "wb");
 	if (seqFile == NULL) {
 		printf("...FAILED!\nERROR: Could not open %s for writing!\n", this->filename.c_str());
 		return 2;
@@ -318,7 +325,7 @@ int SEQFile::write_sequence() {
 	fclose(seqFile);
 
 	printf("...DONE!\n");
-	printf(warnings.c_str());
+	printf("%s", warnings.c_str());
 
 	return 0;
 }

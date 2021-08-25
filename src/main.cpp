@@ -285,11 +285,24 @@ string samples_to_us_print(uint64_t sample_offset) {
 	uint64_t convTime = (uint64_t) (((long double) sample_offset / (long double) inFileProperties->sample_rate) * 1000000.0 + 0.5);
 
 	char buf[64];
-	sprintf(buf, "%d:%d:%02d.%06d",
-		(int) (convTime / 3600000000),
-		(int) (convTime / 60000000) % 60,
-		(int) (convTime / 1000000) % 3600,
-		(int) (convTime % 1000000));
+	if (convTime >= 3600000000) {
+		sprintf(buf, "%d:%02d:%02d.%06d",
+			(int) (convTime / 3600000000),
+			(int) (convTime / 60000000) % 60,
+			(int) (convTime / 1000000) % 60,
+			(int) (convTime % 1000000));
+	}
+	else if (convTime >= 60000000) {
+		sprintf(buf, "%d:%02d.%06d",
+			(int) (convTime / 60000000),
+			(int) (convTime / 1000000) % 60,
+			(int) (convTime % 1000000));
+	}
+	else {
+		sprintf(buf, "%d.%06d",
+			(int) (convTime / 1000000),
+			(int) (convTime % 1000000));
+	}
 
 	string ret = buf;
 	return ret;
@@ -298,7 +311,7 @@ string samples_to_us_print(uint64_t sample_offset) {
 void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
 	printf("\n");
 
-	if (!isStreamGeneration) {
+	if (isStreamGeneration) {
 		printf("    Output Audio File Size(s): %u bytes\n", fileSize);
 
 		printf("    Sample rate: %d Hz", inFileProperties->sample_rate);
@@ -321,11 +334,14 @@ void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
 			samples_to_us_print(inFileProperties->num_samples).c_str());
 	}
 
-	printf("    Number Of Channels: %d", inFileProperties->channels);
-	if (inFileProperties->channels == 1)
-		printf(" (mono)");
-	else if (inFileProperties->channels == 2 && !forcedMono)
-		printf(" (stereo)");
+	printf("    Number of Channels: %d", inFileProperties->channels);
+	if (!forcedMono) {
+		if (inFileProperties->channels == 1)
+			printf(" (mono)");
+		else if (inFileProperties->channels == 2)
+			printf(" (stereo)");
+
+	}
 	printf("\n");
 
 	printf("\n");

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16)
 
 project(STRM64)
 
@@ -26,5 +26,55 @@ if(WIN32)
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/ext_libs"
 		$<TARGET_FILE_DIR:STRM64>)
 else()
-	target_link_libraries(STRM64 "${PROJECT_SOURCE_DIR}/library/vgmstream/lib/libvgmstream.a")
+	# FFmpeg
+	find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
+	find_library(AVCODEC avcodec)
+
+	find_path(AVFORMAT_INCLUDE_DIR libavformat/avformat.h)
+	find_library(AVFORMAT avformat)
+
+	find_path(AVUTIL_INCLUDE_DIR libavutil/avutil.h)
+	find_library(AVUTIL avutil)
+
+	find_path(SWRESAMPLE_INCLUDE_DIR libswresample/swresample.h)
+	find_library(SWRESAMPLE swresample)
+
+	# Vorbis
+	find_path(VORBIS_INCLUDE_DIR vorbis/codec.h)
+	find_library(VORBIS vorbis)
+	
+	find_path(VORBISFILE_INCLUDE_DIR vorbis/vorbisfile.h)
+	find_library(VORBISFILE vorbisfile)
+
+	# MPG123
+	find_path(MPG123_INCLUDE_DIR mpg123.h)
+	find_library(MPG123 mpg123)
+
+	# SPEEX
+	find_path(SPEEX_INCLUDE_DIR speex/speex.h)
+	find_library(SPEEX speex)
+
+	target_include_directories(STRM64
+		PRIVATE
+		${AVCODEC_INCLUDE_DIR}
+		${AVFORMAT_INCLUDE_DIR}
+		${AVUTIL_INCLUDE_DIR}
+		${SWRESAMPLE_INCLUDE_DIR}
+		${VORBIS_INCLUDE_DIR}
+		${VORBISFILE_INCLUDE_DIR}
+		${MPG123_INCLUDE_DIR}
+		${SPEEX_INCLUDE_DIR}
+	)
+	target_link_libraries(STRM64
+		PRIVATE
+		"${PROJECT_SOURCE_DIR}/library/vgmstream/lib/libvgmstream.a"
+		${AVCODEC}
+		${AVFORMAT}
+		${AVUTIL}
+		${SWRESAMPLE}
+		${VORBIS}
+		${VORBISFILE}
+		${MPG123}
+		${SPEEX}
+	)
 endif()

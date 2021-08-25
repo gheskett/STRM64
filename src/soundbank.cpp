@@ -80,9 +80,9 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 	string tmpFilename = filename;
 	size_t slash = tmpFilename.find_last_of("/\\");
 	if (slash == string::npos)
-		tmpFilename = "XX_" + tmpFilename + ".m64";
+		tmpFilename = "XX_" + tmpFilename + ".json";
 	else
-		tmpFilename = tmpFilename.substr(0, slash+1) + "XX_" + tmpFilename.substr(slash+1) + ".m64";
+		tmpFilename = tmpFilename.substr(0, slash+1) + "XX_" + tmpFilename.substr(slash+1) + ".json";
 
 	seqBank = fopen(tmpFilename.c_str(), "wb");
 	if (seqBank == NULL) {

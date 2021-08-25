@@ -111,10 +111,10 @@ void SEQHeader::write_seq_header(FILE *seqFile) {
 	size_t headerPtr = 0; // Initialize data pointer to 0
 
 	// Calculate channels being used with sequence. This intentionally generates channels from MAX - n to MAX, rather than from 0 to n.
+	// I still haven't established whether this actually matters, but it doesn't really hurt either, so I'm keeping it this way for now.
 	uint16_t enabledChannels = 0;
-	for (uint8_t i = NUM_CHANNELS_MAX - this->channelCount; i < NUM_CHANNELS_MAX; i++) {
+	for (uint8_t i = NUM_CHANNELS_MAX - this->channelCount; i < NUM_CHANNELS_MAX; i++)
 		enabledChannels |= (1 << i);
-	}
 
 	// How the sequence behaves when pausing the game (0x20 softens music on pause)
 	header[headerPtr++] = SEQ_MUTE_BEHAVIOR;

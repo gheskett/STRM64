@@ -47,7 +47,6 @@ extern "C" {
 #include "stream.hpp"
 #include "sequence.hpp"
 #include "soundbank.hpp"
-#include "bswp.hpp"
 
 using namespace std;
 
@@ -379,7 +378,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (generateStreams && !ret) {
-		ret = generate_new_streams(inFileProperties, gInstFlags);
+		ret = generate_new_streams(inFileProperties, newFilename);
 	}
 	else if (!ret) {
 		print_header_info(false, 0);

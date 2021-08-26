@@ -45,20 +45,23 @@ Note: STRM64 uses vgmstream to parse audio. You may need to install additional l
 
 - Start by installing the necessary libraries for use with vgmstream
 ```
+# update package information to install up-to-date libraries
+sudo apt update
+
 # base deps
-sudo apt-get install -y gcc g++ make build-essential git
+sudo apt install -y gcc g++ make build-essential git cmake
 
 # vorbis deps
-sudo apt-get install -y libvorbis-dev
+sudo apt install -y libvorbis-dev
 
 # mpeg deps
-sudo apt-get install -y libmpg123-dev
+sudo apt install -y libmpg123-dev
 
 # speex deps
-sudo apt-get install -y libspeex-dev
+sudo apt install -y libspeex-dev
 
 # ffmpeg deps
-sudo apt-get install -y libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
+sudo apt install -y libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
 ```
 
 - Run `cmake -S . -B build` to set up the build files

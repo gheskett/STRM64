@@ -7,6 +7,8 @@
 
 using namespace std;
 
+#define MAX_INT64_T 0x7FFFFFFFFFFFFFFFLL
+
 #define SAMPLE_COUNT_PADDING 0x400
 #define SAMPLE_RATE_MULTIPLE_CONSTANT 0x400E
 #define FORM_HEADER_SIZE 0x0C
@@ -19,10 +21,10 @@ using namespace std;
 // Override parameters
 static int64_t ovrdSampleRate = -1;
 static int64_t ovrdEnableLoop = -1;
-static int64_t ovrdLoopStartSamples = -1;
-static int64_t ovrdLoopEndSamples = -1;
-static int64_t ovrdLoopStartMicro = -1;
-static int64_t ovrdLoopEndMicro = -1;
+static int64_t ovrdLoopStartSamples = MAX_INT64_T;
+static int64_t ovrdLoopEndSamples = MAX_INT64_T;
+static int64_t ovrdLoopStartMicro = MAX_INT64_T;
+static int64_t ovrdLoopEndMicro = MAX_INT64_T;
 
 static uint32_t gFileSize = 0;
 
@@ -46,44 +48,35 @@ void set_enable_loop(int64_t isLoopingEnabled) {
 }
 
 void set_loop_start_samples(int64_t samples) {
-	if (samples < 0 && samples >= 0x100000000) {
+	if (samples >= 0x100000000) {
 		print_param_warning("loop start (samples)");
 		return;
 	}
 
 	ovrdEnableLoop = 1;
-	ovrdLoopStartSamples = (uint32_t) samples;
-	ovrdLoopStartMicro = -1;
+	ovrdLoopStartSamples = samples;
+	ovrdLoopStartMicro = MAX_INT64_T;
 }
 
 void set_loop_end_samples(int64_t samples) {
-	if (samples < 0 && samples >= 0x100000000) {
-		print_param_warning("loop start (samples)");
+	if (samples >= 0x100000000) {
+		print_param_warning("loop end (samples)");
 		return;
 	}
 
-	ovrdLoopEndSamples = (uint32_t) samples;
-	ovrdLoopEndMicro = -1;
+	ovrdLoopEndSamples = samples;
+	ovrdLoopEndMicro = MAX_INT64_T;
 }
 
 void set_loop_start_microseconds(int64_t microseconds) {
-	if (microseconds < 0) {
-		print_param_warning("loop start (microseconds)");
-		return;
-	}
-
+	ovrdEnableLoop = 1;
 	ovrdLoopStartMicro = microseconds;
-	ovrdLoopStartSamples = -1;
+	ovrdLoopStartSamples = MAX_INT64_T;
 }
 
 void set_loop_end_microseconds(int64_t microseconds) {
-	if (microseconds < 0) {
-		print_param_warning("loop end (microseconds)");
-		return;
-	}
-
 	ovrdLoopEndMicro = microseconds;
-	ovrdLoopEndSamples = -1;
+	ovrdLoopEndSamples = MAX_INT64_T;
 }
 
 
@@ -109,10 +102,12 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 
+	// Overridden sample rate
 	if (ovrdSampleRate >= 0) {
-		inFileProperties->sample_rate = (int32_t) ovrdSampleRate;
+		inFileProperties->sample_rate = ovrdSampleRate;
 	}
 
+	// Overridden loop flag
 	if (ovrdEnableLoop >= 0) {
 		if (ovrdEnableLoop && !inFileProperties->loop_flag) {
 			inFileProperties->loop_start_sample = 0;
@@ -120,38 +115,46 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 		}
 		inFileProperties->loop_flag = (int) ovrdEnableLoop;
 	}
-	
-	if (ovrdLoopStartSamples >= 0 && ovrdEnableLoop) {
-		inFileProperties->loop_start_sample = (int32_t) ovrdLoopStartSamples;
-	}
-	
-	if (ovrdLoopEndSamples >= 0) {
-		if (inFileProperties->num_samples < ovrdLoopEndSamples) {
-			ovrdLoopEndSamples = inFileProperties->num_samples;
+
+	// Overridden total sample count / end loop point
+	if (ovrdLoopEndSamples != MAX_INT64_T) {
+		if (ovrdLoopEndSamples > 0) {
+			if (inFileProperties->num_samples < ovrdLoopEndSamples) {
+				ovrdLoopEndSamples = inFileProperties->num_samples;
+			}
+			else {
+				inFileProperties->num_samples = ovrdLoopEndSamples;
+				if (ovrdEnableLoop)
+					inFileProperties->loop_end_sample = ovrdLoopEndSamples;
+			}
 		}
 		else {
-			inFileProperties->num_samples = ovrdLoopEndSamples;
+			inFileProperties->num_samples = ovrdLoopEndSamples + inFileProperties->num_samples;
 			if (ovrdEnableLoop)
-				inFileProperties->loop_end_sample = ovrdLoopEndSamples;
+				inFileProperties->loop_end_sample = ovrdLoopEndSamples + inFileProperties->num_samples;
 		}
 	}
-	
-	if (ovrdLoopStartMicro >= 0) {
-		inFileProperties->sample_rate = (int32_t) sample_to_us(inFileProperties->sample_rate, ovrdLoopStartMicro);
-	}
-	
-	if (ovrdLoopEndMicro >= 0) {
-		int32_t tmpNumSamples = (int32_t) sample_to_us(inFileProperties->sample_rate, ovrdLoopEndMicro);
-		if (inFileProperties->num_samples < tmpNumSamples) {
-			tmpNumSamples = inFileProperties->num_samples;
+	// Overridden total sample count / end loop point, represented in microseconds
+	else if (ovrdLoopEndMicro != MAX_INT64_T) {
+		int64_t tmpNumSamples = sample_to_us(inFileProperties->sample_rate, ovrdLoopEndMicro);
+		if (tmpNumSamples > 0) {
+			if (inFileProperties->num_samples < tmpNumSamples) {
+				tmpNumSamples = inFileProperties->num_samples;
+			}
+			else {
+				inFileProperties->num_samples = tmpNumSamples;
+				if (ovrdEnableLoop)
+					inFileProperties->loop_end_sample = tmpNumSamples;
+			}
 		}
 		else {
-			inFileProperties->num_samples = tmpNumSamples;
+			inFileProperties->num_samples = tmpNumSamples + inFileProperties->num_samples;
 			if (ovrdEnableLoop)
-				inFileProperties->loop_end_sample = tmpNumSamples;
+				inFileProperties->loop_end_sample = tmpNumSamples + inFileProperties->num_samples;
 		}
 	}
 
+	// Loop end / stream length validation checks
 	if (inFileProperties->loop_flag && inFileProperties->loop_end_sample != inFileProperties->num_samples) {
 		if (inFileProperties->loop_end_sample > inFileProperties->num_samples)
 			inFileProperties->loop_end_sample = inFileProperties->num_samples;
@@ -159,16 +162,42 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 			inFileProperties->num_samples = inFileProperties->loop_end_sample;
 	}
 
+	// Loop Start, only handled if looping is enabled
+	if (inFileProperties->loop_flag) {
+		// Overridden start loop point
+		if (ovrdLoopStartSamples != MAX_INT64_T) {
+			if (ovrdLoopStartSamples >= 0) {
+				inFileProperties->loop_start_sample = ovrdLoopStartSamples;
+			}
+			else {
+				inFileProperties->loop_start_sample = ovrdLoopStartSamples + inFileProperties->num_samples;
+			}
+		}
+		// Overridden start loop point, represented in microseconds
+		else if (ovrdLoopStartMicro != MAX_INT64_T) {
+			int64_t tmpNumSamples = sample_to_us(inFileProperties->sample_rate, ovrdLoopStartMicro);
+			if (tmpNumSamples >= 0) {
+				inFileProperties->loop_start_sample = tmpNumSamples;
+			}
+			else {
+				inFileProperties->loop_start_sample = tmpNumSamples + inFileProperties->num_samples;
+			}
+		}
+	}
+
 	if (inFileProperties->num_samples <= 0) {
-		printf("ERROR: The output file must contain more than 0 samples!\n");
+		printf("ERROR: Negative stream length value extends beyond the original stream length!\n");
+		printf("ATTEMPTED VALUE: %d\n", inFileProperties->num_samples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 	if (inFileProperties->loop_flag && inFileProperties->loop_end_sample <= inFileProperties->loop_start_sample) {
 		printf("ERROR: Starting loop point must be smaller than ending loop point!\n");
+		printf("LOOP_START: %d, LOOP_END: %d\n", inFileProperties->loop_start_sample, inFileProperties->loop_end_sample);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 	if (inFileProperties->loop_flag && inFileProperties->loop_start_sample < 0) {
-		printf("ERROR: Negative loop points are not allowed!\n");
+		printf("ERROR: Negative starting loop point value extends beyond the total stream length!\n");
+		printf("ATTEMPTED VALUE: %d\n", inFileProperties->loop_start_sample);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 

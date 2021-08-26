@@ -113,9 +113,9 @@ int64_t parse_string_to_number(string input) {
 		return (int64_t) strtoll(input.substr(2).c_str(), NULL, 16);
 
 	// Is this a boolean?
-	if (input.compare("true"))
+	if (input.compare("true") == 0)
 		return 1;
-	if (input.compare("false"))
+	if (input.compare("false") == 0)
 		return 0;
 
 	// Nope, just a standard number or potentially invalid.

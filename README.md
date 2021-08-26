@@ -34,3 +34,37 @@ STRM64 inputfile.brstm -l false -e 0x10000
 ```
 
 Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.
+
+## Building
+
+### Windows
+
+`TODO: get Windows vgmstream library to work`
+
+### Linux
+
+- Start by installing the necessary libraries for use with vgmstream
+```
+# base deps
+sudo apt-get install -y gcc g++ make build-essential git
+
+# vorbis deps
+sudo apt-get install -y libvorbis-dev
+
+# mpeg deps
+sudo apt-get install -y libmpg123-dev
+
+# speex deps
+sudo apt-get install -y libspeex-dev
+
+# ffmpeg deps
+sudo apt-get install -y libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
+```
+
+- Run `cmake -S . -B build` to set up the build files
+
+- Run `cmake --build build` to compile
+
+- Output executable will be in the `build` folder, simply named STRM64
+
+- To clean the repo of all build/untracked files, run `git clean -dxf`

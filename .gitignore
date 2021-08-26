@@ -63,6 +63,7 @@ _deps
 Debug
 Release
 x64
+build
 *.dir
 
 desktop.ini

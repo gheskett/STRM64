@@ -102,11 +102,11 @@ int64_t sample_to_us(int64_t sampleRate, int64_t sampleOffset) {
 int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 	if (inFileProperties->sample_rate <= 0) {
 		printf("ERROR: Input file has invalid sample rate value!\n");
-		return 2;
+		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 	if (inFileProperties->num_samples <= 0) {
 		printf("ERROR: Input file has no sample data!\n");
-		return 2;
+		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 
 	if (ovrdSampleRate >= 0) {
@@ -161,18 +161,18 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 
 	if (inFileProperties->num_samples <= 0) {
 		printf("ERROR: The output file must contain more than 0 samples!\n");
-		return 2;
+		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 	if (inFileProperties->loop_flag && inFileProperties->loop_end_sample <= inFileProperties->loop_start_sample) {
 		printf("ERROR: Starting loop point must be smaller than ending loop point!\n");
-		return 2;
+		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 	if (inFileProperties->loop_flag && inFileProperties->loop_start_sample < 0) {
 		printf("ERROR: Negative loop points are not allowed!\n");
-		return 2;
+		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 
-	return 0;
+	return RETURN_SUCCESS;
 }
 
 
@@ -382,7 +382,7 @@ void write_ssnd_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	uint32_t samplesPadded = (uint32_t) inFileProperties->num_samples;
 	if (samplesPadded % SAMPLE_COUNT_PADDING)
 		samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
-	tmp32BitValue = bswap_32((uint32_t) (samplesPadded * sizeof(sample_t) - 8));
+	tmp32BitValue = bswap_32((uint32_t) (SSND_PRE_HEADER_SIZE + samplesPadded * sizeof(sample_t) - 8));
 	fwrite(&tmp32BitValue, 4, 1, streamFile);
 	
 	// Offset (always 0 in this case) [0x08]
@@ -449,16 +449,17 @@ int write_streams(VGMSTREAM *inFileProperties, string newFilename) {
 	print_header_info(true, gFileSize);
 
 	printf("Generating streamed file(s)...");
+	fflush(stdout);
 	for (int i = 0; i < inFileProperties->channels; i++) {
 		streamFiles[i] = fopen((newFilename + "_" + get_num_to_hex((uint8_t) i) + ".aiff").c_str(), "wb");
-		if (!streamFiles) {
+		if (!streamFiles[i]) {
 			printf("...FAILED!\nERROR: Could not open %s for writing!\n", (newFilename + "_" + get_num_to_hex((uint8_t) i) + ".aiff").c_str());
 
 			for (int j = i - 1; j >= 0; j--)
 				fclose(streamFiles[j]);
 
 			delete[] streamFiles;
-			return 3;
+			return RETURN_STREAM_CANNOT_CREATE_FILE;
 		}
 	}
 
@@ -473,7 +474,7 @@ int write_streams(VGMSTREAM *inFileProperties, string newFilename) {
 
 	printf("...DONE!\n");
 
-	return 0;
+	return RETURN_SUCCESS;
 }
 
 int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename) {

@@ -53,12 +53,14 @@ using namespace std;
 vector <string> cmdArgs;
 
 string newFilename;
+string parsedExeName;
 bool customNewFilename = false;
 bool forcedMono = false;
 
 bool generateStreams = true;
 bool generateSequence = true;
 bool generateSoundbank = true;
+bool printedHelp = false;
 
 uint16_t gInstFlags = 0x0000;
 
@@ -66,8 +68,12 @@ VGMSTREAM *inFileProperties;
 VGMSTREAM *inFilePropertiess;
 
 void printHelp() {
+	if (printedHelp)
+		return;
+	printedHelp = true;
+
 	string print = "\n"
-		"Usage: STRM64 <input audio file> [optional arguments]\n"
+		"Usage: " + parsedExeName + " <input audio file> [optional arguments]\n"
 		"\n"
 		"OPTIONAL ARGUMENTS\n"
 		"    -o [output file]                           (default: same as input, not including extension)\n"
@@ -86,11 +92,11 @@ void printHelp() {
 		"    -h                                         (show help text)\n"
 		"\n"
 		"USAGE EXAMPLES\n"
-		"    STRM64 inputfile.wav -o outfiles -s 158462 -e 7485124\n"
-		"    STRM64 \"spaces not recommended.wav\" -l 1 -f 95000000\n"
-		"    STRM64 inputfile.brstm -l false -e 0x10000\n"
+		"    " + parsedExeName + " inputfile.wav -o outfiles -s 158462 -e 7485124\n"
+		"    " + parsedExeName + " \"spaces not recommended.wav\" -l 1 -f 95000000\n"
+		"    " + parsedExeName + " inputfile.brstm -l false -e 0x10000\n"
 		"\n"
-		"Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.\n";
+		"Note: " + parsedExeName + " uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.\n\n";
 
 	printf("%s", print.c_str());
 }
@@ -103,12 +109,8 @@ int64_t parse_string_to_number(string input) {
 	transform(input.begin(), input.end(), input.begin(), ::tolower);
 
 	// Is this a hex number?
-	if (input.length() > 2) {
-		char isHexNumber = input[1];
-		if (isHexNumber == 'x') {
-			return (int64_t) strtoll(input.substr(2).c_str(), NULL, 16);
-		}
-	}
+	if (input.length() > 2 && input[1] == 'x')
+		return (int64_t) strtoll(input.substr(2).c_str(), NULL, 16);
 
 	// Is this a boolean?
 	if (input.compare("true"))
@@ -135,7 +137,11 @@ string strip_extension(string inStr) {
 }
 
 string replace_spaces(string inStr) {
-	for (size_t i = 0; i < inStr.length(); i++) {
+	size_t offsetSlash = inStr.find_last_of("/\\");
+	if (offsetSlash == string::npos)
+		offsetSlash = 0;
+
+	for (size_t i = offsetSlash; i < inStr.length(); i++) {
 		if (inStr[i] == ' ')
 			inStr[i] = '_';
 	}
@@ -151,7 +157,7 @@ int parse_input_arguments() {
 	for (size_t i = 0; i < cmdArgs.size(); i++) {
 		string arg = cmdArgs.at(i);
 		if (arg.length() != 2 || arg[0] != '-')
-			return 2;
+			return RETURN_INVALID_ARGS;
 
 		char argVal = (char) tolower(arg[1]);
 
@@ -177,7 +183,7 @@ int parse_input_arguments() {
 
 		i++;
 		if (i == cmdArgs.size())
-			return 2;
+			return RETURN_INVALID_ARGS;
 
 		arg = cmdArgs.at(i);
 
@@ -232,43 +238,44 @@ int parse_input_arguments() {
 			seq_set_mute_scale(parse_string_to_number(arg));
 			break;
 		default:
-			return 2;
+			return RETURN_INVALID_ARGS;
 		}
 	}
 
 	if (isPrintHelp)
 		printHelp();
 
-	return 0;
+	return RETURN_SUCCESS;
 }
 
 int get_vgmstream_properties(const char *inFilename) {
 	inFileProperties = init_vgmstream(inFilename);
 	printf("Opening %s for reading...", inFilename);
+	fflush(stdout);
 
 	if (!inFileProperties) {
 		FILE *invalidFile = fopen(inFilename, "r");
 		if (invalidFile == NULL) {
 			printf("...FAILED!\nERROR: Input file cannot be found or opened!\n");
-			return 3;
+			return RETURN_CANNOT_FIND_INPUT_FILE;
 		}
 		fclose(invalidFile);
 
 		printf("...FAILED!\nERROR: Input file is not a valid audio file!\nIf you believe this is a fluke, please make sure you have the proper audio libraries installed.\n");
 		printf("Alternatively, you can convert the input file to WAV separately and try again.\n");
-		return 4;
+		return RETURN_INVALID_INPUT_FILE;
 	}
 
 	if (inFileProperties->channels <= 0) {
 		printf("...FAILED!\nERROR: Audio cannot have less than 1 audio channel!\nCONTAINS: %d channels\n", inFileProperties->channels);
 		close_vgmstream(inFileProperties);
-		return 5;
+		return RETURN_NOT_ENOUGH_CHANNELS;
 	}
 
 	if (inFileProperties->channels > VGMSTREAM_MAX_CHANNELS) {
 		printf("...FAILED!\nERROR: Audio file exceeds maximum of %d channels!\nCONTAINS: %d channels\n", (int) NUM_CHANNELS_MAX, inFileProperties->channels);
 		close_vgmstream(inFileProperties);
-		return 6;
+		return RETURN_TOO_MANY_CHANNELS;
 	}
 
 	// Currently using bitflags to represent channels serves no purpose, but it may be easier to automate for decomp soundbank optimization in the future.
@@ -277,7 +284,7 @@ int get_vgmstream_properties(const char *inFilename) {
 
 	printf("...SUCCESS!\n");
 
-	return 0;
+	return RETURN_SUCCESS;
 }
 
 string samples_to_us_print(uint64_t sample_offset) {
@@ -347,12 +354,20 @@ void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
 }
 
 int main(int argc, char **argv) {
-	if (argc == 0)
-		return 1;
+	if (argc == 0) {
+		parsedExeName = "STRM64";
+		printHelp();
+		return RETURN_NOT_ENOUGH_ARGS;
+	}
+
+	parsedExeName = argv[0];
+	size_t slash = (int32_t) parsedExeName.find_last_of("/\\");
+	if (slash != string::npos)
+		parsedExeName = parsedExeName.substr(slash+1);
 
 	if (argc < 2) {
 		printHelp();
-		return 1;
+		return RETURN_NOT_ENOUGH_ARGS;
 	}
 
 	newFilename = argv[1];
@@ -377,18 +392,24 @@ int main(int argc, char **argv) {
 		return ret;
 	}
 
-	if (generateStreams && !ret) {
+	if (generateStreams)
 		ret = generate_new_streams(inFileProperties, newFilename);
-	}
-	else if (!ret) {
+	else
 		print_header_info(false, 0);
+
+	if (generateSequence) {
+		if (!ret)
+			ret = generate_new_sequence(newFilename, gInstFlags);
+		else
+			generate_new_sequence(newFilename, gInstFlags);
 	}
 
-	if (generateSequence && !ret)
-		ret = generate_new_sequence(newFilename, gInstFlags);
-
-	if (generateSoundbank && !ret)
-		ret = generate_new_soundbank(newFilename, gInstFlags);
+	if (generateSoundbank) {
+		if (!ret)
+			ret = generate_new_soundbank(newFilename, gInstFlags);
+		else
+			generate_new_soundbank(newFilename, gInstFlags);
+	}
 
 	close_vgmstream(inFileProperties);
 

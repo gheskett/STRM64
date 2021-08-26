@@ -298,6 +298,7 @@ int SEQFile::write_sequence() {
 	FILE *seqFile;
 
 	printf("Generating sequence file...");
+	fflush(stdout);
 
 	string tmpFilename = this->filename;
 	size_t slash = tmpFilename.find_last_of("/\\");
@@ -309,7 +310,7 @@ int SEQFile::write_sequence() {
 	seqFile = fopen(tmpFilename.c_str(), "wb");
 	if (seqFile == NULL) {
 		printf("...FAILED!\nERROR: Could not open %s for writing!\n", this->filename.c_str());
-		return 2;
+		return RETURN_SEQUENCE_CANNOT_CREATE_FILE;
 	}
 
 	warnings = "";
@@ -327,7 +328,7 @@ int SEQFile::write_sequence() {
 	printf("...DONE!\n");
 	printf("%s", warnings.c_str());
 
-	return 0;
+	return RETURN_SUCCESS;
 }
 
 int generate_new_sequence(string filename, uint16_t instFlags) {
@@ -340,7 +341,7 @@ int generate_new_sequence(string filename, uint16_t instFlags) {
 		numChannels++;
 	}
 	if (numChannels == 0)
-		return 1;
+		return RETURN_SEQUENCE_NO_CHANNELS;
 
 	SEQFile sequence(filename, instFlags, numChannels);
 

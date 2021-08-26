@@ -76,6 +76,7 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 	FILE *seqBank;
 
 	printf("Generating soundbank file...");
+	fflush(stdout);
 
 	string tmpFilename = filename;
 	size_t slash = tmpFilename.find_last_of("/\\");
@@ -87,7 +88,7 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 	seqBank = fopen(tmpFilename.c_str(), "wb");
 	if (seqBank == NULL) {
 		printf("...FAILED!\nERROR: Could not open %s for writing!\n", filename.c_str());
-		return 2;
+		return RETURN_SOUNDBANK_CANNOT_CREATE_FILE;
 	}
 
 	string bankStr = generate_bank_start();
@@ -99,7 +100,7 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 
 	printf("...DONE!\n");
 
-	return 0;
+	return RETURN_SUCCESS;
 }
 
 int generate_new_soundbank(string filename, uint16_t instFlags) {
@@ -112,7 +113,7 @@ int generate_new_soundbank(string filename, uint16_t instFlags) {
 		numChannels++;
 	}
 	if (numChannels == 0)
-		return 1;
+		return RETURN_SOUNDBANK_NO_CHANNELS;
 
 	return write_to_soundbank(filename, instFlags, numChannels);
 }

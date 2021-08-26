@@ -11,7 +11,6 @@ Usage: `STRM64 <input audio file> [optional arguments]`
 OPTIONAL ARGUMENTS
 ```
 -o [output filenames]                      (default: same as input, not including extension)
--c                                         (force vgmstream conversion)
 -r [sample rate]                           (default: same as source file (this does NOT resample the audio!))
 -l [enable/disable loop]                   (default: either value in source audio or false)
 -s [loop start sample]                     (default: either value in source audio or 0)

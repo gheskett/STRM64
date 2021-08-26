@@ -104,7 +104,7 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 
 	// Overridden sample rate
 	if (ovrdSampleRate >= 0) {
-		inFileProperties->sample_rate = ovrdSampleRate;
+		inFileProperties->sample_rate = (int32_t) ovrdSampleRate;
 	}
 
 	// Overridden loop flag
@@ -123,15 +123,15 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 				ovrdLoopEndSamples = inFileProperties->num_samples;
 			}
 			else {
-				inFileProperties->num_samples = ovrdLoopEndSamples;
+				inFileProperties->num_samples = (int32_t) ovrdLoopEndSamples;
 				if (ovrdEnableLoop)
-					inFileProperties->loop_end_sample = ovrdLoopEndSamples;
+					inFileProperties->loop_end_sample = (int32_t) ovrdLoopEndSamples;
 			}
 		}
 		else {
-			inFileProperties->num_samples = ovrdLoopEndSamples + inFileProperties->num_samples;
+			inFileProperties->num_samples = (int32_t) ovrdLoopEndSamples + inFileProperties->num_samples;
 			if (ovrdEnableLoop)
-				inFileProperties->loop_end_sample = ovrdLoopEndSamples + inFileProperties->num_samples;
+				inFileProperties->loop_end_sample = (int32_t) ovrdLoopEndSamples + inFileProperties->num_samples;
 		}
 	}
 	// Overridden total sample count / end loop point, represented in microseconds
@@ -142,15 +142,15 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 				tmpNumSamples = inFileProperties->num_samples;
 			}
 			else {
-				inFileProperties->num_samples = tmpNumSamples;
+				inFileProperties->num_samples = (int32_t) tmpNumSamples;
 				if (ovrdEnableLoop)
-					inFileProperties->loop_end_sample = tmpNumSamples;
+					inFileProperties->loop_end_sample = (int32_t) tmpNumSamples;
 			}
 		}
 		else {
-			inFileProperties->num_samples = tmpNumSamples + inFileProperties->num_samples;
+			inFileProperties->num_samples = (int32_t) tmpNumSamples + inFileProperties->num_samples;
 			if (ovrdEnableLoop)
-				inFileProperties->loop_end_sample = tmpNumSamples + inFileProperties->num_samples;
+				inFileProperties->loop_end_sample = (int32_t) tmpNumSamples + inFileProperties->num_samples;
 		}
 	}
 
@@ -167,20 +167,20 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 		// Overridden start loop point
 		if (ovrdLoopStartSamples != MAX_INT64_T) {
 			if (ovrdLoopStartSamples >= 0) {
-				inFileProperties->loop_start_sample = ovrdLoopStartSamples;
+				inFileProperties->loop_start_sample = (int32_t) ovrdLoopStartSamples;
 			}
 			else {
-				inFileProperties->loop_start_sample = ovrdLoopStartSamples + inFileProperties->num_samples;
+				inFileProperties->loop_start_sample = (int32_t) ovrdLoopStartSamples + inFileProperties->num_samples;
 			}
 		}
 		// Overridden start loop point, represented in microseconds
 		else if (ovrdLoopStartMicro != MAX_INT64_T) {
 			int64_t tmpNumSamples = sample_to_us(inFileProperties->sample_rate, ovrdLoopStartMicro);
 			if (tmpNumSamples >= 0) {
-				inFileProperties->loop_start_sample = tmpNumSamples;
+				inFileProperties->loop_start_sample = (int32_t) tmpNumSamples;
 			}
 			else {
-				inFileProperties->loop_start_sample = tmpNumSamples + inFileProperties->num_samples;
+				inFileProperties->loop_start_sample = (int32_t) tmpNumSamples + inFileProperties->num_samples;
 			}
 		}
 	}
@@ -226,7 +226,7 @@ void calculate_aiff_file_size(VGMSTREAM *inFileProperties) {
 }
 
 
-void write_form_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
+void write_form_header(FILE *streamFile) {
 	const char formHeader[] = "FORM";
 	const char aiffHeader[] = "AIFF";
 	uint32_t bswpFileSize = bswap_32(gFileSize - 8);
@@ -258,7 +258,7 @@ void write_comm_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Number of Samples, padded to SAMPLE_COUNT_PADDING [0x0A]
-	tmp32BitValue = inFileProperties->num_samples;
+	tmp32BitValue = (uint32_t) inFileProperties->num_samples;
 	if (tmp32BitValue % SAMPLE_COUNT_PADDING)
 		tmp32BitValue += SAMPLE_COUNT_PADDING - (tmp32BitValue % SAMPLE_COUNT_PADDING);
 	tmp32BitValue = bswap_32(tmp32BitValue);
@@ -346,7 +346,7 @@ void write_mark_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 }
 
 // May not even be needed, but here just in case
-void write_inst_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
+void write_inst_header(FILE *streamFile) {
 	const char instHeader[] = "INST";
 	uint8_t tmp8BitValue;
 	uint16_t tmp16BitValue;
@@ -425,12 +425,12 @@ void write_ssnd_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 
 void write_stream_headers(VGMSTREAM *inFileProperties, FILE **streamFiles) {
 	for (int i = 0; i < inFileProperties->channels; i++) {
-		write_form_header(inFileProperties, streamFiles[i]);
+		write_form_header(streamFiles[i]);
 		write_comm_header(inFileProperties, streamFiles[i]);
 
 		if (inFileProperties->loop_flag) {
 			write_mark_header(inFileProperties, streamFiles[i]);
-			write_inst_header(inFileProperties, streamFiles[i]);
+			write_inst_header(streamFiles[i]);
 		}
 
 		write_ssnd_header(inFileProperties, streamFiles[i]);
@@ -444,16 +444,16 @@ void write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
 
 	uint32_t loopCount = (uint32_t) (samplesPadded / SAMPLE_COUNT_PADDING);
 
-	sample_t *audioBuffer = new sample_t[SAMPLE_COUNT_PADDING * inFileProperties->channels];
+	sample_t *audioBuffer = new sample_t[SAMPLE_COUNT_PADDING * (size_t) inFileProperties->channels];
 
-	sample_t **printBuffer = new sample_t*[inFileProperties->channels];
+	sample_t **printBuffer = new sample_t*[(size_t) inFileProperties->channels];
 	for (int i = 0; i < inFileProperties->channels; i++)
 		printBuffer[i] = new sample_t[SAMPLE_COUNT_PADDING];
 
 	for (uint32_t i = 0; i < loopCount; i++) {
 		int samplesRendered = render_vgmstream(audioBuffer, SAMPLE_COUNT_PADDING, inFileProperties);
 
-		for (uint32_t j = samplesRendered * inFileProperties->channels; j < SAMPLE_COUNT_PADDING * (uint32_t) inFileProperties->channels; j++)
+		for (uint32_t j = (uint32_t) (samplesRendered * inFileProperties->channels); j < SAMPLE_COUNT_PADDING * (uint32_t) inFileProperties->channels; j++)
 			audioBuffer[j] = 0;
 
 		for (uint32_t j = 0; j < SAMPLE_COUNT_PADDING * (uint32_t) inFileProperties->channels; j++)
@@ -472,7 +472,7 @@ void write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
 }
 
 int write_streams(VGMSTREAM *inFileProperties, string newFilename) {
-	FILE **streamFiles = new FILE*[inFileProperties->channels];
+	FILE **streamFiles = new FILE*[(size_t) inFileProperties->channels];
 
 	calculate_aiff_file_size(inFileProperties);
 	print_header_info(true, gFileSize);

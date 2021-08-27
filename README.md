@@ -71,3 +71,5 @@ sudo apt install -y libavformat-dev libavcodec-dev libavutil-dev libswresample-d
 - Output executable will be in the `build` folder, simply named STRM64
 
 - To clean the repo of all build/untracked files, run `git clean -dxf`
+
+If you are unable to make conversions that require libraries such as ffmpeg (e.g. mp3 files), you may need to upgrade to a newer Unix distro to install libraries that are up to date. If after doing this you are still unable to make conversions, it may be worth making a separate conversion to WAV using a separate software, and then trying again.

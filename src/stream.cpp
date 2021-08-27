@@ -36,6 +36,8 @@ AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
 	if (enableLoop) {
 		loopStartSamples = inFileProperties->loop_start_sample;
 		loopEndSamples = inFileProperties->loop_end_sample;
+		if (loopEndSamples < numSamples)
+			numSamples = loopEndSamples;
 	}
 	else {
 		loopStartSamples = 0;

@@ -64,7 +64,7 @@ sudo apt install -y libspeex-dev
 sudo apt install -y libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
 ```
 
-- Run `cmake -S . -B build` to set up the build files
+- Run `cmake -S . -Bbuild` to set up the build files
 
 - Run `cmake --build build` to compile
 

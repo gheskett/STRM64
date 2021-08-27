@@ -55,12 +55,13 @@ vector <string> cmdArgs;
 string newFilename;
 string parsedExeName;
 bool customNewFilename = false;
-bool forcedMono = false;
 
 bool generateStreams = true;
 bool generateSequence = true;
 bool generateSoundbank = true;
 bool printedHelp = false;
+
+static bool forcedMono = false;
 
 uint16_t gInstFlags = 0x0000;
 
@@ -128,10 +129,8 @@ string strip_extension(string inStr) {
 		return inStr;
 
 	size_t offsetSlash = inStr.find_last_of("/\\");
-	if (offsetSlash != string::npos) {
-		if (offsetSlash > offsetPeriod)
-			return inStr;
-	}
+	if (offsetSlash != string::npos && offsetSlash > offsetPeriod)
+		return inStr;
 
 	return inStr.substr(0, offsetPeriod);
 }
@@ -141,9 +140,9 @@ string replace_spaces(string inStr) {
 	if (offsetSlash == string::npos)
 		offsetSlash = 0;
 
-	for (size_t i = offsetSlash; i < inStr.length(); i++) {
-		if (inStr[i] == ' ')
-			inStr[i] = '_';
+	for (; offsetSlash < inStr.length(); offsetSlash++) {
+		if (inStr[offsetSlash] == ' ')
+			inStr[offsetSlash] = '_';
 	}
 
 	return inStr;
@@ -161,10 +160,11 @@ int parse_input_arguments() {
 
 		char argVal = (char) tolower(arg[1]);
 
-		// Single value arguments
+		// Standalone arguments
 		switch (argVal) {
 		case 'm':
 			seq_set_mono();
+			set_strm_force_mono();
 			forcedMono = true;
 			continue;
 		case 'x':
@@ -187,7 +187,7 @@ int parse_input_arguments() {
 
 		arg = cmdArgs.at(i);
 
-		// Multi value arguments
+		// Value arguments
 		switch (argVal) {
 		case 'o':
 			slash = (int32_t) arg.find_last_of("/\\");
@@ -267,7 +267,7 @@ int get_vgmstream_properties(const char *inFilename) {
 	}
 
 	if (inFileProperties->channels <= 0) {
-		printf("...FAILED!\nERROR: Audio cannot have less than 1 audio channel!\nCONTAINS: %d channels\n", inFileProperties->channels);
+		printf("...FAILED!\nERROR: Audio must have at least 1 channel!\nCONTAINS: %d channels\n", inFileProperties->channels);
 		close_vgmstream(inFileProperties);
 		return RETURN_NOT_ENOUGH_CHANNELS;
 	}
@@ -287,64 +287,21 @@ int get_vgmstream_properties(const char *inFilename) {
 	return RETURN_SUCCESS;
 }
 
-string samples_to_us_print(uint64_t sample_offset) {
-	uint64_t convTime = (uint64_t) (((long double) sample_offset / (long double) inFileProperties->sample_rate) * 1000000.0 + 0.5);
 
-	char buf[64];
-	if (convTime >= 3600000000) {
-		sprintf(buf, "%d:%02d:%02d.%06d",
-			(int) (convTime / 3600000000),
-			(int) (convTime / 60000000) % 60,
-			(int) (convTime / 1000000) % 60,
-			(int) (convTime % 1000000));
-	}
-	else if (convTime >= 60000000) {
-		sprintf(buf, "%d:%02d.%06d",
-			(int) (convTime / 60000000),
-			(int) (convTime / 1000000) % 60,
-			(int) (convTime % 1000000));
-	}
-	else {
-		sprintf(buf, "%d.%06d",
-			(int) (convTime / 1000000),
-			(int) (convTime % 1000000));
-	}
+void print_seq_channels(uint16_t instFlags) {
+	uint8_t numChannels = 0;
 
-	string ret = buf;
-	return ret;
-}
+	for (uint8_t i = 0; i < VGMSTREAM_MAX_CHANNELS; i++)
+		if (instFlags | (1 << i))
+			numChannels++;
 
-void print_header_info(bool isStreamGeneration, uint32_t fileSize) {
 	printf("\n");
 
-	if (isStreamGeneration) {
-		printf("    Output Audio File Size(s): %u bytes\n", fileSize);
-
-		printf("    Sample rate: %d Hz", inFileProperties->sample_rate);
-		if (inFileProperties->sample_rate > 32000)
-			printf(" (Downsampling recommended!)");
-		printf("\n");
-
-		printf("    Is Looped: ");
-		if (inFileProperties->loop_flag) {
-			printf("true\n");
-
-			printf("    Starting Loop Point: %d Samples (Time: %s)\n", inFileProperties->loop_start_sample,
-				samples_to_us_print(inFileProperties->loop_start_sample).c_str());
-		}
-		else {
-			printf("false\n");
-		}
-
-		printf("    End of Stream: %d Samples (Time: %s)\n", inFileProperties->num_samples,
-			samples_to_us_print(inFileProperties->num_samples).c_str());
-	}
-
-	printf("    Number of Channels: %d", inFileProperties->channels);
+	printf("    Number of Channels: %d", numChannels);
 	if (!forcedMono) {
-		if (inFileProperties->channels == 1)
+		if (numChannels == 1)
 			printf(" (mono)");
-		else if (inFileProperties->channels == 2)
+		else if (numChannels == 2)
 			printf(" (stereo)");
 
 	}
@@ -361,7 +318,7 @@ int main(int argc, char **argv) {
 	}
 
 	parsedExeName = argv[0];
-	size_t slash = (int32_t) parsedExeName.find_last_of("/\\");
+	size_t slash = parsedExeName.find_last_of("/\\");
 	if (slash != string::npos)
 		parsedExeName = parsedExeName.substr(slash+1);
 
@@ -395,7 +352,7 @@ int main(int argc, char **argv) {
 	if (generateStreams)
 		ret = generate_new_streams(inFileProperties, newFilename);
 	else
-		print_header_info(false, 0);
+		print_seq_channels(gInstFlags);
 
 	if (generateSequence) {
 		if (!ret)

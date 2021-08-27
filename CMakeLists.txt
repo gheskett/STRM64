@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.10)
 
 project(STRM64)
 
@@ -36,6 +36,9 @@ if(WIN32)
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libvorbis.a"
 	)
 else()
+	set (CMAKE_C_COMPILER=gcc-9.3)
+	set (CMAKE_CXX_COMPILER=g++)
+
 	# FFmpeg
 	find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
 	find_library(AVCODEC avcodec)

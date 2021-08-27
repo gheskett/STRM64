@@ -9,7 +9,6 @@ using namespace std;
 
 #define MAX_INT64_T 0x7FFFFFFFFFFFFFFFLL
 
-#define SAMPLE_COUNT_PADDING 0x400
 #define SAMPLE_RATE_MULTIPLE_CONSTANT 0x400E
 #define FORM_HEADER_SIZE 0x0C
 #define COMM_HEADER_SIZE 0x1A
@@ -26,7 +25,102 @@ static int64_t ovrdLoopEndSamples = MAX_INT64_T;
 static int64_t ovrdLoopStartMicro = MAX_INT64_T;
 static int64_t ovrdLoopEndMicro = MAX_INT64_T;
 
+static bool forcedMono = false;
+
 static uint32_t gFileSize = 0;
+
+
+AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
+    sampleRate = inFileProperties->sample_rate;
+    enableLoop = inFileProperties->loop_flag;
+	if (enableLoop) {
+		loopStartSamples = inFileProperties->loop_start_sample;
+		loopEndSamples = inFileProperties->loop_end_sample;
+	}
+	else {
+		loopStartSamples = 0;
+		loopEndSamples = numSamples;
+	}
+    numSamples = inFileProperties->num_samples;
+	numChannels = inFileProperties->channels;
+}
+AudioOutData::~AudioOutData() {
+
+}
+
+
+string AudioOutData::samples_to_us_print(uint64_t sampleOffset) {
+	uint64_t convTime = (uint64_t) (((long double) sampleOffset / (long double) sampleRate) * 1000000.0 + 0.5);
+
+	char buf[64];
+	if (convTime >= 3600000000) {
+		sprintf(buf, "%d:%02d:%02d.%06d",
+			(int) (convTime / 3600000000),
+			(int) (convTime / 60000000) % 60,
+			(int) (convTime / 1000000) % 60,
+			(int) (convTime % 1000000));
+	}
+	else if (convTime >= 60000000) {
+		sprintf(buf, "%d:%02d.%06d",
+			(int) (convTime / 60000000),
+			(int) (convTime / 1000000) % 60,
+			(int) (convTime % 1000000));
+	}
+	else {
+		sprintf(buf, "%d.%06d",
+			(int) (convTime / 1000000),
+			(int) (convTime % 1000000));
+	}
+
+	string ret = buf;
+	return ret;
+}
+
+void AudioOutData::print_header_info() {
+	printf("\n");
+
+	if (numChannels == 1)
+		printf("    File Size of AIFF: %u bytes\n", gFileSize * (uint32_t) numChannels);
+	else
+		printf("    Cumulative File Size of AIFFs: %u bytes\n", gFileSize * (uint32_t) numChannels);
+
+	printf("    Sample Rate: %d Hz", sampleRate);
+	if (sampleRate > 32000)
+		printf(" (Downsampling recommended!)");
+	printf("\n");
+
+	printf("    Is Looped: ");
+	if (enableLoop) {
+		printf("true\n");
+
+		printf("    Starting Loop Point: %d Samples (Time: %s)\n", loopStartSamples,
+			samples_to_us_print(loopStartSamples).c_str());
+
+		printf("    Ending Loop Point: %d Samples (Time: %s)\n", loopEndSamples,
+			samples_to_us_print(loopEndSamples).c_str());
+	}
+	else {
+		printf("false\n");
+
+		int32_t samplesPadded = numSamples;
+		if (samplesPadded % SAMPLE_COUNT_PADDING)
+			samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
+		printf("    End of Stream: %d Samples (Time: %s)\n", samplesPadded,
+			samples_to_us_print(samplesPadded).c_str());
+	}
+
+	printf("    Number of Channels: %d", numChannels);
+	if (!forcedMono) {
+		if (numChannels == 1)
+			printf(" (mono)");
+		else if (numChannels == 2)
+			printf(" (stereo)");
+
+	}
+	printf("\n");
+
+	printf("\n");
+}
 
 
 void set_sample_rate(int64_t sampleRate) {
@@ -79,6 +173,10 @@ void set_loop_end_microseconds(int64_t microseconds) {
 	ovrdLoopEndSamples = MAX_INT64_T;
 }
 
+void set_strm_force_mono() {
+	forcedMono = true;
+}
+
 
 char get_num_to_hex(uint8_t num) {
 	char ret = (num & 0x0F) + 48;
@@ -92,112 +190,96 @@ int64_t sample_to_us(int64_t sampleRate, int64_t sampleOffset) {
 	return (int64_t) (((long double) sampleOffset / (long double) sampleRate) * 1000000.0 + 0.5);
 }
 
-int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
-	if (inFileProperties->sample_rate <= 0) {
+int AudioOutData::check_properties(string newFilename) {
+	if (sampleRate <= 0) {
 		printf("ERROR: Input file has invalid sample rate value!\n");
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
-	if (inFileProperties->num_samples <= 0) {
+	if (numSamples <= 0) {
 		printf("ERROR: Input file has no sample data!\n");
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 
 	// Overridden sample rate
-	if (ovrdSampleRate >= 0) {
-		inFileProperties->sample_rate = (int32_t) ovrdSampleRate;
+	if (ovrdSampleRate > 0) {
+		sampleRate = (int32_t) ovrdSampleRate;
 	}
 
 	// Overridden loop flag
 	if (ovrdEnableLoop >= 0) {
-		if (ovrdEnableLoop && !inFileProperties->loop_flag) {
-			inFileProperties->loop_start_sample = 0;
-			inFileProperties->loop_end_sample = inFileProperties->num_samples;
+		if (ovrdEnableLoop && !enableLoop) {
+			loopStartSamples = 0;
+			loopEndSamples = numSamples;
 		}
-		inFileProperties->loop_flag = (int) ovrdEnableLoop;
+		enableLoop = (int) ovrdEnableLoop;
 	}
 
 	// Overridden total sample count / end loop point
 	if (ovrdLoopEndSamples != MAX_INT64_T) {
 		if (ovrdLoopEndSamples > 0) {
-			if (inFileProperties->num_samples < ovrdLoopEndSamples) {
-				ovrdLoopEndSamples = inFileProperties->num_samples;
-			}
-			else {
-				inFileProperties->num_samples = (int32_t) ovrdLoopEndSamples;
-				if (ovrdEnableLoop)
-					inFileProperties->loop_end_sample = (int32_t) ovrdLoopEndSamples;
-			}
+			if (numSamples > ovrdLoopEndSamples)
+				numSamples = (int32_t) ovrdLoopEndSamples;
 		}
 		else {
-			inFileProperties->num_samples = (int32_t) ovrdLoopEndSamples + inFileProperties->num_samples;
-			if (ovrdEnableLoop)
-				inFileProperties->loop_end_sample = (int32_t) ovrdLoopEndSamples + inFileProperties->num_samples;
+			numSamples = (int32_t) ovrdLoopEndSamples + numSamples;
 		}
+		if (enableLoop)
+			loopEndSamples = numSamples;
 	}
 	// Overridden total sample count / end loop point, represented in microseconds
 	else if (ovrdLoopEndMicro != MAX_INT64_T) {
-		int64_t tmpNumSamples = sample_to_us(inFileProperties->sample_rate, ovrdLoopEndMicro);
+		int64_t tmpNumSamples = sample_to_us(sampleRate, ovrdLoopEndMicro);
 		if (tmpNumSamples > 0) {
-			if (inFileProperties->num_samples < tmpNumSamples) {
-				tmpNumSamples = inFileProperties->num_samples;
-			}
-			else {
-				inFileProperties->num_samples = (int32_t) tmpNumSamples;
-				if (ovrdEnableLoop)
-					inFileProperties->loop_end_sample = (int32_t) tmpNumSamples;
-			}
+			if (numSamples > tmpNumSamples)
+				numSamples = (int32_t) tmpNumSamples;
 		}
 		else {
-			inFileProperties->num_samples = (int32_t) tmpNumSamples + inFileProperties->num_samples;
-			if (ovrdEnableLoop)
-				inFileProperties->loop_end_sample = (int32_t) tmpNumSamples + inFileProperties->num_samples;
+			numSamples = (int32_t) tmpNumSamples + numSamples;
 		}
+		if (enableLoop)
+			loopEndSamples = numSamples;
 	}
 
 	// Loop end / stream length validation checks
-	if (inFileProperties->loop_flag && inFileProperties->loop_end_sample != inFileProperties->num_samples) {
-		if (inFileProperties->loop_end_sample > inFileProperties->num_samples)
-			inFileProperties->loop_end_sample = inFileProperties->num_samples;
+	if (enableLoop && loopEndSamples != numSamples) {
+		if (loopEndSamples > numSamples)
+			loopEndSamples = numSamples;
 		else
-			inFileProperties->num_samples = inFileProperties->loop_end_sample;
+			numSamples = loopEndSamples;
 	}
 
 	// Loop Start, only handled if looping is enabled
-	if (inFileProperties->loop_flag) {
+	if (enableLoop) {
 		// Overridden start loop point
 		if (ovrdLoopStartSamples != MAX_INT64_T) {
-			if (ovrdLoopStartSamples >= 0) {
-				inFileProperties->loop_start_sample = (int32_t) ovrdLoopStartSamples;
-			}
-			else {
-				inFileProperties->loop_start_sample = (int32_t) ovrdLoopStartSamples + inFileProperties->num_samples;
-			}
+			if (ovrdLoopStartSamples >= 0)
+				loopStartSamples = (int32_t) ovrdLoopStartSamples;
+			else
+				loopStartSamples = (int32_t) ovrdLoopStartSamples + numSamples;
 		}
 		// Overridden start loop point, represented in microseconds
 		else if (ovrdLoopStartMicro != MAX_INT64_T) {
-			int64_t tmpNumSamples = sample_to_us(inFileProperties->sample_rate, ovrdLoopStartMicro);
-			if (tmpNumSamples >= 0) {
-				inFileProperties->loop_start_sample = (int32_t) tmpNumSamples;
-			}
-			else {
-				inFileProperties->loop_start_sample = (int32_t) tmpNumSamples + inFileProperties->num_samples;
-			}
+			int64_t tmpNumSamples = sample_to_us(sampleRate, ovrdLoopStartMicro);
+			if (tmpNumSamples >= 0)
+				loopStartSamples = (int32_t) tmpNumSamples;
+			else
+				loopStartSamples = (int32_t) tmpNumSamples + numSamples;
 		}
 	}
 
-	if (inFileProperties->num_samples <= 0) {
+	if (numSamples <= 0) {
 		printf("ERROR: Negative stream length value extends beyond the original stream length!\n");
-		printf("ATTEMPTED VALUE: %d\n", inFileProperties->num_samples);
+		printf("ATTEMPTED VALUE: %d\n", numSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
-	if (inFileProperties->loop_flag && inFileProperties->loop_end_sample <= inFileProperties->loop_start_sample) {
+	if (numSamples && loopEndSamples <= loopStartSamples) {
 		printf("ERROR: Starting loop point must be smaller than ending loop point!\n");
-		printf("LOOP_START: %d, LOOP_END: %d\n", inFileProperties->loop_start_sample, inFileProperties->loop_end_sample);
+		printf("LOOP_START: %d, LOOP_END: %d\n", loopStartSamples, loopEndSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
-	if (inFileProperties->loop_flag && inFileProperties->loop_start_sample < 0) {
+	if (enableLoop && loopStartSamples < 0) {
 		printf("ERROR: Negative starting loop point value extends beyond the total stream length!\n");
-		printf("ATTEMPTED VALUE: %d\n", inFileProperties->loop_start_sample);
+		printf("ATTEMPTED VALUE: %d\n", loopStartSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 
@@ -205,20 +287,20 @@ int check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 }
 
 
-void calculate_aiff_file_size(VGMSTREAM *inFileProperties) {
+void AudioOutData::calculate_aiff_file_size() {
 	gFileSize = 0;
 
 	gFileSize += FORM_HEADER_SIZE;
 	gFileSize += COMM_HEADER_SIZE;
 
-	if (inFileProperties->loop_flag) {
+	if (enableLoop) {
 		gFileSize += MARK_HEADER_SIZE;
 		gFileSize += INST_HEADER_SIZE;
 	}
 
 	gFileSize += SSND_PRE_HEADER_SIZE;
 
-	int32_t samplesPadded = inFileProperties->num_samples;
+	int32_t samplesPadded = numSamples;
 	if (samplesPadded % SAMPLE_COUNT_PADDING)
 		samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
 
@@ -226,7 +308,7 @@ void calculate_aiff_file_size(VGMSTREAM *inFileProperties) {
 }
 
 
-void write_form_header(FILE *streamFile) {
+void AudioOutData::write_form_header(FILE *streamFile) {
 	const char formHeader[] = "FORM";
 	const char aiffHeader[] = "AIFF";
 	uint32_t bswpFileSize = bswap_32(gFileSize - 8);
@@ -241,7 +323,7 @@ void write_form_header(FILE *streamFile) {
 	fwrite(aiffHeader, 1, 4, streamFile);
 }
 
-void write_comm_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
+void AudioOutData::write_comm_header(FILE *streamFile) {
 	const char commHeader[] = "COMM";
 	uint16_t tmp16BitValue;
 	uint32_t tmp32BitValue;
@@ -258,7 +340,7 @@ void write_comm_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Number of Samples, padded to SAMPLE_COUNT_PADDING [0x0A]
-	tmp32BitValue = (uint32_t) inFileProperties->num_samples;
+	tmp32BitValue = (uint32_t) numSamples;
 	if (tmp32BitValue % SAMPLE_COUNT_PADDING)
 		tmp32BitValue += SAMPLE_COUNT_PADDING - (tmp32BitValue % SAMPLE_COUNT_PADDING);
 	tmp32BitValue = bswap_32(tmp32BitValue);
@@ -270,7 +352,7 @@ void write_comm_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 
 	// Calculate sample rate stuffs, weirdly complicated to calculate manually
 	uint16_t sampleRateMultiple = SAMPLE_RATE_MULTIPLE_CONSTANT;
-	uint32_t sampleRateCurrent = (uint32_t) inFileProperties->sample_rate;
+	uint32_t sampleRateCurrent = (uint32_t) sampleRate;
 	uint64_t sampleRateRemainder = 0;
 	while (sampleRateCurrent < 0x8000) {
 		sampleRateMultiple--;
@@ -295,7 +377,7 @@ void write_comm_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	fwrite(&sampleRateRemainder, 1, 6, streamFile); // Proper endianness check not used here, should be addressed later if it ever matters
 }
 
-void write_mark_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
+void AudioOutData::write_mark_header(FILE *streamFile) {
 	const char markHeader[] = "MARK";
 	const char startMarker[] = "start";
 	const char endMarker[] = "end";
@@ -319,7 +401,7 @@ void write_mark_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Sample Offset (Loop Start Value) [0x0C]
-	tmp32BitValue = bswap_32((uint32_t) (inFileProperties->loop_start_sample));
+	tmp32BitValue = bswap_32((uint32_t) (loopStartSamples));
 	fwrite(&tmp32BitValue, 4, 1, streamFile);
 
 	// Marker Id ("start" is 5 characters) [0x10]
@@ -334,7 +416,7 @@ void write_mark_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Sample Offset (Loop End Value) [0x18]
-	tmp32BitValue = bswap_32((uint32_t) (inFileProperties->loop_end_sample));
+	tmp32BitValue = bswap_32((uint32_t) (loopEndSamples));
 	fwrite(&tmp32BitValue, 4, 1, streamFile);
 
 	// Marker Id ("end" is 3 characters) [0x1C]
@@ -346,7 +428,7 @@ void write_mark_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 }
 
 // May not even be needed, but here just in case
-void write_inst_header(FILE *streamFile) {
+void AudioOutData::write_inst_header(FILE *streamFile) {
 	const char instHeader[] = "INST";
 	uint8_t tmp8BitValue;
 	uint16_t tmp16BitValue;
@@ -400,7 +482,7 @@ void write_inst_header(FILE *streamFile) {
 	fwrite(&tmp32BitValue, 4, 1, streamFile);
 }
 
-void write_ssnd_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
+void AudioOutData::write_ssnd_header(FILE *streamFile) {
 	const char ssndHeader[] = "SSND";
 	uint32_t tmp32BitValue;
 
@@ -408,7 +490,7 @@ void write_ssnd_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	fwrite(ssndHeader, 1, 4, streamFile);
 
 	// SSND Size - 8 [0x04]
-	uint32_t samplesPadded = (uint32_t) inFileProperties->num_samples;
+	uint32_t samplesPadded = (uint32_t) numSamples;
 	if (samplesPadded % SAMPLE_COUNT_PADDING)
 		samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
 	tmp32BitValue = bswap_32((uint32_t) (SSND_PRE_HEADER_SIZE + samplesPadded * sizeof(sample_t) - 8));
@@ -423,46 +505,51 @@ void write_ssnd_header(VGMSTREAM *inFileProperties, FILE *streamFile) {
 	fwrite(&tmp32BitValue, 4, 1, streamFile);
 }
 
-void write_stream_headers(VGMSTREAM *inFileProperties, FILE **streamFiles) {
-	for (int i = 0; i < inFileProperties->channels; i++) {
+void AudioOutData::write_stream_headers(FILE **streamFiles) {
+	for (int i = 0; i < numChannels; i++) {
 		write_form_header(streamFiles[i]);
-		write_comm_header(inFileProperties, streamFiles[i]);
+		write_comm_header(streamFiles[i]);
 
-		if (inFileProperties->loop_flag) {
-			write_mark_header(inFileProperties, streamFiles[i]);
+		if (enableLoop) {
+			write_mark_header(streamFiles[i]);
 			write_inst_header(streamFiles[i]);
 		}
 
-		write_ssnd_header(inFileProperties, streamFiles[i]);
+		write_ssnd_header(streamFiles[i]);
 	}
 }
 
-void write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
-	uint32_t samplesPadded = (uint32_t) inFileProperties->num_samples;
+void AudioOutData::write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
+	uint32_t samplesPadded = (uint32_t) numSamples;
 	if (samplesPadded % SAMPLE_COUNT_PADDING)
 		samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
 
-	uint32_t loopCount = (uint32_t) (samplesPadded / SAMPLE_COUNT_PADDING);
+	uint32_t bufferSize = MIN_PRINT_BUFFER_SIZE;
+	if (MIN_PRINT_BUFFER_SIZE < SAMPLE_COUNT_PADDING)
+		bufferSize = SAMPLE_COUNT_PADDING;
 
-	sample_t *audioBuffer = new sample_t[SAMPLE_COUNT_PADDING * (size_t) inFileProperties->channels];
+	sample_t *audioBuffer = new sample_t[bufferSize * (size_t) inFileProperties->channels];
 
 	sample_t **printBuffer = new sample_t*[(size_t) inFileProperties->channels];
 	for (int i = 0; i < inFileProperties->channels; i++)
-		printBuffer[i] = new sample_t[SAMPLE_COUNT_PADDING];
+		printBuffer[i] = new sample_t[bufferSize];
 
-	for (uint32_t i = 0; i < loopCount; i++) {
-		int samplesRendered = render_vgmstream(audioBuffer, SAMPLE_COUNT_PADDING, inFileProperties);
+	for (uint32_t samplesProcessed = 0; samplesProcessed < samplesPadded; samplesProcessed += bufferSize) {
+		render_vgmstream(audioBuffer, bufferSize, inFileProperties);
 
-		for (uint32_t j = (uint32_t) (samplesRendered * inFileProperties->channels); j < SAMPLE_COUNT_PADDING * (uint32_t) inFileProperties->channels; j++)
+		// Not using inFileProperties->num_samples here is by intention, so padding is composed of zeros rather than unwanted audio data.
+		for (uint64_t j = (((uint64_t) numSamples - samplesProcessed) * (uint64_t) inFileProperties->channels);
+		 j < (uint64_t) bufferSize * (uint64_t) inFileProperties->channels; j++)
 			audioBuffer[j] = 0;
 
-		for (uint32_t j = 0; j < SAMPLE_COUNT_PADDING * (uint32_t) inFileProperties->channels; j++)
+		for (uint32_t j = 0; j < bufferSize * (uint32_t) inFileProperties->channels; j++)
 			printBuffer[j % inFileProperties->channels][j / inFileProperties->channels] = (sample_t) bswap_16((uint16_t) audioBuffer[j]);
 
-		// printf("%d\n", samplesRendered);
-
-		for (int32_t j = 0; j < inFileProperties->channels; j++)
-			fwrite(printBuffer[j], sizeof(sample_t), SAMPLE_COUNT_PADDING, streamFiles[j]);
+		for (int32_t j = 0; j < numChannels; j++)
+			if (samplesProcessed + bufferSize > (uint32_t) samplesPadded)
+				fwrite(printBuffer[j], sizeof(sample_t), samplesPadded - samplesProcessed, streamFiles[j]);
+			else
+				fwrite(printBuffer[j], sizeof(sample_t), bufferSize, streamFiles[j]);
 	}
 
 	for (int i = 0; i < inFileProperties->channels; i++)
@@ -471,15 +558,15 @@ void write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
 	delete[] audioBuffer;
 }
 
-int write_streams(VGMSTREAM *inFileProperties, string newFilename) {
-	FILE **streamFiles = new FILE*[(size_t) inFileProperties->channels];
+int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename) {
+	FILE **streamFiles = new FILE*[(size_t) numChannels];
 
-	calculate_aiff_file_size(inFileProperties);
-	print_header_info(true, gFileSize);
+	calculate_aiff_file_size();
+	print_header_info();
 
 	printf("Generating streamed file(s)...");
 	fflush(stdout);
-	for (int i = 0; i < inFileProperties->channels; i++) {
+	for (int i = 0; i < numChannels; i++) {
 		streamFiles[i] = fopen((newFilename + "_" + get_num_to_hex((uint8_t) i) + ".aiff").c_str(), "wb");
 		if (!streamFiles[i]) {
 			printf("...FAILED!\nERROR: Could not open %s for writing!\n", (newFilename + "_" + get_num_to_hex((uint8_t) i) + ".aiff").c_str());
@@ -492,11 +579,11 @@ int write_streams(VGMSTREAM *inFileProperties, string newFilename) {
 		}
 	}
 
-	write_stream_headers(inFileProperties, streamFiles);
+	write_stream_headers(streamFiles);
 
 	write_audio_data(inFileProperties, streamFiles);
 
-	for (int i = 0; i < inFileProperties->channels; i++)
+	for (int i = 0; i < numChannels; i++)
 		fclose(streamFiles[i]);
 
 	delete[] streamFiles;
@@ -510,10 +597,15 @@ int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename) {
 	if (!inFileProperties)
 		return 1;
 
-	int ret = check_properties(inFileProperties, newFilename);
-	if (ret)
-		return ret;
-	ret = write_streams(inFileProperties, newFilename);
+	AudioOutData *audioData = new AudioOutData(inFileProperties);
 
+	int ret = audioData->check_properties(newFilename);
+	if (ret) {
+		delete audioData;
+		return ret;
+	}
+	ret = audioData->write_streams(inFileProperties, newFilename);
+
+	delete audioData;
 	return ret;
 }

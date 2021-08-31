@@ -33,6 +33,9 @@ static uint32_t gFileSize = 0;
 AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
     sampleRate = inFileProperties->sample_rate;
     enableLoop = inFileProperties->loop_flag;
+    numSamples = inFileProperties->num_samples;
+	numChannels = inFileProperties->channels;
+	
 	if (enableLoop) {
 		loopStartSamples = inFileProperties->loop_start_sample;
 		loopEndSamples = inFileProperties->loop_end_sample;
@@ -43,8 +46,6 @@ AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
 		loopStartSamples = 0;
 		loopEndSamples = numSamples;
 	}
-    numSamples = inFileProperties->num_samples;
-	numChannels = inFileProperties->channels;
 }
 AudioOutData::~AudioOutData() {
 
@@ -274,7 +275,7 @@ int AudioOutData::check_properties(string newFilename) {
 		printf("ATTEMPTED VALUE: %d\n", numSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
-	if (numSamples && loopEndSamples <= loopStartSamples) {
+	if (enableLoop && loopEndSamples <= loopStartSamples) {
 		printf("ERROR: Starting loop point must be smaller than ending loop point!\n");
 		printf("LOOP_START: %d, LOOP_END: %d\n", loopStartSamples, loopEndSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;

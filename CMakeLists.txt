@@ -20,8 +20,6 @@ add_executable(STRM64
 ${SRC_FILES})
 
 if(WIN32)
-	set (CMAKE_C_COMPILER=gcc-10.3)
-	set (CMAKE_CXX_COMPILER=g++)
 	target_link_libraries(STRM64
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libvgmstream.a"
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libatrac9.a"
@@ -32,13 +30,16 @@ if(WIN32)
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libcelt-0110.a"
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libg719_decode.a"
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libmpg123-0.a"
-		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libswresample.a"
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libvorbis.a"
+		
+		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libswresample.a"
+		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libspeex.a"
 	)
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+		${CMAKE_SOURCE_DIR}/library/vgmstream/windows/ext_libs
+		$<TARGET_FILE_DIR:${PROJECT_NAME}>)
 else()
-	set (CMAKE_C_COMPILER=gcc-9.3)
-	set (CMAKE_CXX_COMPILER=g++)
-
 	# FFmpeg
 	find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
 	find_library(AVCODEC avcodec)

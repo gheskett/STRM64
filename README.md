@@ -39,7 +39,38 @@ Note: STRM64 uses vgmstream to parse audio. You may need to install additional l
 
 ### Windows
 
-`TODO: get Windows vgmstream library to work`
+#### Windows Setup
+
+- Install MSYS2 with MinGW (specifically 32 bit; this does not currently compile with 64-bit)
+
+- Add `C:\msys64\mingw32\bin` to your Path (if also installing 64-bit shell, make sure mingw32 gets priority over mingw64)
+
+- Open MSYS2 MinGW 32-bit and install the following libraries as such:
+```
+# update package information
+pacman -Syu
+
+# install essential MinGW 32-bit tools
+pacman -Sy mingw-w64-i686-toolchain
+
+# install cmake stuff
+pacman -Sy mingw-w64-i686-cmake mingw-w64-i686-ninja
+```
+
+- Close out of the MinGW shell and open up the command prompt. Check your version of gcc with `gcc -v`
+-- If gcc is referencing use with mingw32, you're good to go. If not, make sure your Path is given enough priority.
+
+#### Windows Building
+
+- Navigate to the root directory of STRM64 and run `cmake -S . -Bbuild` to set up build files
+
+- Run `cmake --build build` to compile
+
+- Output executable will be in the `build` folder, simply named STRM64.exe
+
+- To clean the repo of all build/untracked files, run `git clean -dxf`
+
+Note (almost) all of the dll files that appear in the build directory are mandatory for the Windows build to run with vgmstream. Please keep this in mind if moving the executable to a new location.
 
 ### Linux
 
@@ -64,12 +95,14 @@ sudo apt install -y libspeex-dev
 sudo apt install -y libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
 ```
 
-- Run `cmake -S . -Bbuild` to set up the build files
+- Navigate to the root directory of STRM64 and run `cmake -S . -Bbuild` to set up build files
 
 - Run `cmake --build build` to compile
 
 - Output executable will be in the `build` folder, simply named STRM64
 
 - To clean the repo of all build/untracked files, run `git clean -dxf`
+
+- NOTE: You may also need to install Ninja for use with cmake
 
 If you are unable to make conversions that require libraries such as ffmpeg (e.g. mp3 files), you may need to upgrade to a newer Unix distro to install libraries that are up to date. If after doing this you are still unable to make conversions, it may be worth making a separate conversion to WAV using a separate software, and then trying again.

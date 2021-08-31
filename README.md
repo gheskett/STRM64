@@ -58,7 +58,7 @@ pacman -Sy mingw-w64-i686-cmake mingw-w64-i686-ninja
 ```
 
 - Close out of the MinGW shell and open up the command prompt. Check your version of gcc with `gcc -v`
--- If gcc is referencing use with mingw32, you're good to go. If not, make sure your Path is given enough priority.
+  - If gcc is referencing use with mingw32, you're good to go. If not, make sure your Path is given enough priority.
 
 #### Windows Building
 

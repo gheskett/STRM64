@@ -272,7 +272,7 @@ int get_vgmstream_properties(const char *inFilename) {
 		return RETURN_NOT_ENOUGH_CHANNELS;
 	}
 
-	if (inFileProperties->channels > VGMSTREAM_MAX_CHANNELS) {
+	if (inFileProperties->channels > NUM_CHANNELS_MAX) {
 		printf("...FAILED!\nERROR: Audio file exceeds maximum of %d channels!\nCONTAINS: %d channels\n", (int) NUM_CHANNELS_MAX, inFileProperties->channels);
 		close_vgmstream(inFileProperties);
 		return RETURN_TOO_MANY_CHANNELS;
@@ -291,8 +291,8 @@ int get_vgmstream_properties(const char *inFilename) {
 void print_seq_channels(uint16_t instFlags) {
 	uint8_t numChannels = 0;
 
-	for (uint8_t i = 0; i < VGMSTREAM_MAX_CHANNELS; i++)
-		if (instFlags | (1 << i))
+	for (uint8_t i = 0; i < NUM_CHANNELS_MAX; i++)
+		if (instFlags & (1 << i))
 			numChannels++;
 
 	printf("\n");

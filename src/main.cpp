@@ -370,5 +370,8 @@ int main(int argc, char **argv) {
 
 	close_vgmstream(inFileProperties);
 
+	if (!generateStreams && !generateSequence && !generateSoundbank)
+		printf("No files to generate!\n");
+
 	return ret;
 }

@@ -33,7 +33,7 @@ STRM64 "spaces not recommended.wav" -l 1 -f 95000000
 STRM64 inputfile.brstm -l false -e 0x10000
 ```
 
-Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.
+Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported. For the Windows build of this application, the bundled dlls are mandatory for this program to run. You may need also to find additional dlls and add them to the folder (Windows) or install additional libraries such as FFmpeg to run the build (Linux).
 
 ## Building
 

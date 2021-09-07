@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(STRM64)
 
-add_compile_options(-Wall -g -O3 -march=native -DNDEBUG -static-libgcc -static-libstdc++)
+add_compile_options(-Wall -g -O3 -march=native -DNDEBUG)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(library/vgmstream/include)
@@ -41,7 +41,7 @@ if(WIN32)
 	)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
-		${CMAKE_SOURCE_DIR}/library/vgmstream/windows/ext_libs
+		${PROJECT_SOURCE_DIR}/library/vgmstream/windows/ext_libs
 		$<TARGET_FILE_DIR:${PROJECT_NAME}>)
 else()
 	# FFmpeg
@@ -96,8 +96,5 @@ else()
 		${SPEEX}
 	)
 endif()
-		
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different
-	"${PROJECT_SOURCE_DIR}/README.md"
-	$<TARGET_FILE_DIR:${PROJECT_NAME}>)
+
+configure_file(${PROJECT_SOURCE_DIR}/README.md README.md COPYONLY)

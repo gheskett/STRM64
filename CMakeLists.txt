@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(STRM64)
 
-add_compile_options(-Wall -g -O3 -march=native -DNDEBUG)
+add_compile_options(-Wall -g -O3 -march=native -DNDEBUG -static-libgcc -static-libstdc++)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(library/vgmstream/include)
@@ -21,6 +21,10 @@ ${SRC_FILES})
 
 if(WIN32)
 	target_link_libraries(STRM64
+		-static-libgcc
+		-static-libstdc++
+		-static
+		winpthread
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libvgmstream.a"
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libatrac9.a"
 		"${PROJECT_SOURCE_DIR}/library/vgmstream/windows/libavcodec.a"

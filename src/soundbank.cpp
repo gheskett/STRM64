@@ -9,7 +9,7 @@ string generate_bank_start() {
 	return
 		"{\n"
 		"    \"date\": \"1996-03-19\",\n"
-		"    \"sample_bank\": \"streamed_audio\",\n"
+		"    \"sample_bank\": \"streamed_audio\",\n" // TODO: Custom folder names
 		"    \"envelopes\": {\n"
 		"        \"envelope0\": [\n"
 		"            [1, 32700],\n"
@@ -78,12 +78,17 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 	printf("Generating soundbank file...");
 	fflush(stdout);
 
+	string shortFilename;
 	string tmpFilename = filename;
 	size_t slash = tmpFilename.find_last_of("/\\");
-	if (slash == string::npos)
-		tmpFilename = "XX_" + tmpFilename + ".json";
-	else
-		tmpFilename = tmpFilename.substr(0, slash+1) + "XX_" + tmpFilename.substr(slash+1) + ".json";
+	if (slash == string::npos) {
+		shortFilename = tmpFilename;
+		tmpFilename = "XX_" + shortFilename + ".json";
+	}
+	else {
+		shortFilename = tmpFilename.substr(slash+1);
+		tmpFilename = tmpFilename.substr(0, slash+1) + "XX_" + shortFilename + ".json";
+	}
 
 	seqBank = fopen(tmpFilename.c_str(), "wb");
 	if (seqBank == NULL) {
@@ -92,7 +97,7 @@ int write_to_soundbank(string filename, uint16_t instFlags, uint8_t numChannels)
 	}
 
 	string bankStr = generate_bank_start();
-	bankStr += generate_instrument_strings(bankStr, filename, instFlags, numChannels);
+	bankStr += generate_instrument_strings(bankStr, shortFilename, instFlags, numChannels);
 
 	fwrite(bankStr.c_str(), 1, bankStr.length(), seqBank); // Not using fprintf here to avoid carriage returns on Windows
 

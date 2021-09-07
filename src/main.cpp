@@ -28,7 +28,8 @@
  * USAGE EXAMPLES
  *	STRM64 inputfile.wav -o outfiles -s 158462 -e 7485124
  *	STRM64 "spaces not recommended.wav" -l 1 -f 95000000
- *  STRM64 inputfile.brstm -l false -e 0x10000
+ *	STRM64 inputfile.brstm -l false -e 0x10000
+ *	STRM64 custom_soundeffect.wav -y -z
  *
  * Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.
  * For the Windows build of this application, the bundled dlls are mandatory for this program to run.
@@ -95,9 +96,10 @@ void printHelp() {
 		"    -h                                         (show help text)\n"
 		"\n"
 		"USAGE EXAMPLES\n"
-		"    " + parsedExeName + " inputfile.wav -o outfiles -s 158462 -e 7485124\n"
+		"    " + parsedExeName + " inputfile.wav -o custom_outfiles -s 158462 -e 7485124\n"
 		"    " + parsedExeName + " \"spaces not recommended.wav\" -l 1 -f 95000000\n"
 		"    " + parsedExeName + " inputfile.brstm -l false -e 0x10000\n"
+		"    " + parsedExeName + " custom_soundeffect.wav -y -z\n"
 		"\n"
 		"Note: " + parsedExeName + " uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.\n\n";
 

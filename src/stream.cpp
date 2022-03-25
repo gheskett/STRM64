@@ -189,8 +189,8 @@ char get_num_to_hex(uint8_t num) {
 	return ret;
 }
 
-int64_t sample_to_us(int64_t sampleRate, int64_t sampleOffset) {
-	return (int64_t) (((long double) sampleOffset / (long double) sampleRate) * 1000000.0 + 0.5);
+int64_t us_to_samples(int64_t sampleRate, int64_t timeOffset) {
+	return (int64_t) ((((long double) timeOffset / 1000000.0) * (long double) sampleRate) + 0.5);
 }
 
 int AudioOutData::check_properties(string newFilename) {
@@ -231,7 +231,7 @@ int AudioOutData::check_properties(string newFilename) {
 	}
 	// Overridden total sample count / end loop point, represented in microseconds
 	else if (ovrdLoopEndMicro != MAX_INT64_T) {
-		int64_t tmpNumSamples = sample_to_us(sampleRate, ovrdLoopEndMicro);
+		int64_t tmpNumSamples = us_to_samples(sampleRate, ovrdLoopEndMicro);
 		if (tmpNumSamples > 0) {
 			if (numSamples > tmpNumSamples)
 				numSamples = (int32_t) tmpNumSamples;
@@ -262,7 +262,7 @@ int AudioOutData::check_properties(string newFilename) {
 		}
 		// Overridden start loop point, represented in microseconds
 		else if (ovrdLoopStartMicro != MAX_INT64_T) {
-			int64_t tmpNumSamples = sample_to_us(sampleRate, ovrdLoopStartMicro);
+			int64_t tmpNumSamples = us_to_samples(sampleRate, ovrdLoopStartMicro);
 			if (tmpNumSamples >= 0)
 				loopStartSamples = (int32_t) tmpNumSamples;
 			else

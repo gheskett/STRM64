@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(STRM64)
 
-add_compile_options(-Wall -g -O3 -march=native -DNDEBUG)
+add_compile_options(-Wall -g -O3 -DNDEBUG)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(library/vgmstream/include)

@@ -79,7 +79,6 @@ public:
 	void write_trk_header(FILE *seqFile);
 };
 
-void seq_set_mono();
 void seq_set_mute_scale(int64_t muteScale);
 void seq_set_master_volume(int64_t volume);
 

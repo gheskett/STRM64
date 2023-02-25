@@ -13,8 +13,6 @@ string generate_bank_start() {
 		"    \"envelopes\": {\n"
 		"        \"envelope0\": [\n"
 		"            [1, 32700],\n"
-		"            [1, 32700],\n"
-		"            [32700, 29430],\n"
 		"            \"hang\"\n"
 		"        ]\n"
 		"    },\n"
@@ -44,14 +42,30 @@ string generate_instrument_strings(string bankStr, string filename, uint16_t ins
 		instruments += ": {\n"
 			"            \"release_rate\": 10,\n"
 			"            \"envelope\": \"envelope0\",\n"
-			"            \"sound\": \"" + filename + "_";
+			"            \"sound\": \"";
 
-		char index = (j & 0x0F) + 48;
-		if (index >= 58)
-			index += 7;
+		string newFilename = filename;
+		
+		if (numChannels == 2 && !is_mono()) {
+			if (j == 0) {
+				newFilename += "_L";
+			} else {
+				newFilename += "_R";
+			}
+		} else if (numChannels != 1) {
+			newFilename += '_';
 
-		instruments += index;
-		instruments += "\"\n"
+			char index = (j & 0x0F) + 48;
+			if (index >= 58)
+				index += 7;
+			newFilename += index;
+		}
+
+		if (newFilename.compare(get_filename_duplicate()) == 0) {
+			newFilename += "_0";
+		}
+
+		instruments += newFilename + "\"\n"
 			"        }";
 
 		j++;

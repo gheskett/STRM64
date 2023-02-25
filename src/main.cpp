@@ -65,11 +65,11 @@ bool generateSoundbank = true;
 bool printedHelp = false;
 
 static bool forcedMono = false;
+static string duplicateStringName = "";
 
 uint16_t gInstFlags = 0x0000;
 
 VGMSTREAM *inFileProperties;
-VGMSTREAM *inFilePropertiess;
 
 void printHelp() {
 	if (printedHelp)
@@ -80,7 +80,7 @@ void printHelp() {
 		"Usage: " + parsedExeName + " <input audio file> [optional arguments]\n"
 		"\n"
 		"OPTIONAL ARGUMENTS\n"
-		"    -o [output file]                           (default: same as input, not including extension)\n"
+		"    -o [output filenames]                      (default: same as input, not including extension)\n"
 		"    -r [sample rate]                           (default: same as source file (this does NOT resample the audio!))\n"
 		"    -l [enable/disable loop]                   (default: value in source audio or false)\n"
 		"    -s [loop start sample]                     (default: value in source audio or 0)\n"
@@ -104,6 +104,22 @@ void printHelp() {
 		"Note: " + parsedExeName + " uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported.\n\n";
 
 	printf("%s", print.c_str());
+}
+
+bool is_mono() {
+	return forcedMono;
+}
+
+string get_filename_duplicate() {
+	return duplicateStringName;
+}
+
+void set_filename_duplicate(string duplicate) {
+	duplicateStringName = duplicate;
+	size_t slash = duplicate.find_last_of("/\\");
+	if (slash != string::npos) {
+		duplicateStringName = duplicate.substr(slash+1);
+	}
 }
 
 void print_param_warning(string param) {
@@ -167,8 +183,6 @@ int parse_input_arguments() {
 		// Standalone arguments
 		switch (argVal) {
 		case 'm':
-			seq_set_mono();
-			set_strm_force_mono();
 			forcedMono = true;
 			continue;
 		case 'x':
@@ -354,7 +368,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (generateStreams)
-		ret = generate_new_streams(inFileProperties, newFilename);
+		ret = generate_new_streams(inFileProperties, newFilename, argv[1]);
 	else
 		print_seq_channels(gInstFlags);
 

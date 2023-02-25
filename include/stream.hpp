@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "vgmstream.h"
+#include "libswresample/swresample.h"
 }
 
 #define SAMPLE_COUNT_PADDING 0x10
@@ -32,16 +33,16 @@ public:
     void write_ssnd_header(FILE *streamFile);
     void write_stream_headers(FILE **streamFiles);
     void write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles);
-    int write_streams(VGMSTREAM *inFileProperties, std::string newFilename);
+    void resample_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles);
+    int write_streams(VGMSTREAM *inFileProperties, std::string newFilename, std::string oldFilename);
 };
 		
-int generate_new_streams(VGMSTREAM *inFileProperties, std::string newFilename);
+int generate_new_streams(VGMSTREAM *inFileProperties, std::string newFilename, std::string oldFilename);
 void set_sample_rate(int64_t sampleRate);
 void set_enable_loop(int64_t isLoopingEnabled);
 void set_loop_start_samples(int64_t samples);
 void set_loop_end_samples(int64_t samples);
 void set_loop_start_microseconds(int64_t microseconds);
 void set_loop_end_microseconds(int64_t microseconds);
-void set_strm_force_mono();
 
 #endif

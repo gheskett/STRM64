@@ -25,8 +25,6 @@ static int64_t ovrdLoopEndSamples = MAX_INT64_T;
 static int64_t ovrdLoopStartMicro = MAX_INT64_T;
 static int64_t ovrdLoopEndMicro = MAX_INT64_T;
 
-static bool forcedMono = false;
-
 static uint32_t gFileSize = 0;
 
 
@@ -113,7 +111,7 @@ void AudioOutData::print_header_info() {
 	}
 
 	printf("    Number of Channels: %d", numChannels);
-	if (!forcedMono) {
+	if (!is_mono()) {
 		if (numChannels == 1)
 			printf(" (mono)");
 		else if (numChannels == 2)
@@ -175,11 +173,6 @@ void set_loop_end_microseconds(int64_t microseconds) {
 	ovrdLoopEndMicro = microseconds;
 	ovrdLoopEndSamples = MAX_INT64_T;
 }
-
-void set_strm_force_mono() {
-	forcedMono = true;
-}
-
 
 char get_num_to_hex(uint8_t num) {
 	char ret = (num & 0x0F) + 48;
@@ -522,6 +515,11 @@ void AudioOutData::write_stream_headers(FILE **streamFiles) {
 	}
 }
 
+// TODO:
+void AudioOutData::resample_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
+	
+}
+
 void AudioOutData::write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
 	uint32_t samplesPadded = (uint32_t) numSamples;
 	if (samplesPadded % SAMPLE_COUNT_PADDING)
@@ -561,7 +559,7 @@ void AudioOutData::write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFi
 	delete[] audioBuffer;
 }
 
-int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename) {
+int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename, string oldFilename) {
 	FILE **streamFiles = new FILE*[(size_t) numChannels];
 
 	calculate_aiff_file_size();
@@ -570,9 +568,30 @@ int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename)
 	printf("Generating streamed file(s)...");
 	fflush(stdout);
 	for (int i = 0; i < numChannels; i++) {
-		streamFiles[i] = fopen((newFilename + "_" + get_num_to_hex((uint8_t) i) + ".aiff").c_str(), "wb");
+		string suffix = "";
+		if (numChannels == 2 && !is_mono()) {
+			if (i == 0) {
+				suffix += "_L";
+			} else {
+				suffix += "_R";
+			}
+		} else if (numChannels != 1) {
+			suffix += '_' + get_num_to_hex((uint8_t) i);
+		}
+
+		string finalFilename = newFilename + suffix + ".aiff";
+
+		// Only check for duplicates here; if exporting only the soundbank but not the streams, the soundbank should ignore duplicate filenames.
+		// This is necessary as to not overwrite the source file being read by vgmstream, without having to terminate the entire application.
+		// Even if we were to just rely on fopen failing, this doesn't always work as expected.
+		if (finalFilename.compare(oldFilename) == 0) {
+			set_filename_duplicate(newFilename + suffix);
+			finalFilename = newFilename + suffix + "_0" + ".aiff";
+		}
+
+		streamFiles[i] = fopen((finalFilename).c_str(), "wb");
 		if (!streamFiles[i]) {
-			printf("...FAILED!\nERROR: Could not open %s for writing!\n", (newFilename + "_" + get_num_to_hex((uint8_t) i) + ".aiff").c_str());
+			printf("...FAILED!\nERROR: Could not open %s for writing!\n", (finalFilename).c_str());
 
 			for (int j = i - 1; j >= 0; j--)
 				fclose(streamFiles[j]);
@@ -596,7 +615,7 @@ int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename)
 	return RETURN_SUCCESS;
 }
 
-int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename) {
+int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename, string oldFilename) {
 	if (!inFileProperties)
 		return 1;
 
@@ -607,7 +626,7 @@ int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename) {
 		delete audioData;
 		return ret;
 	}
-	ret = audioData->write_streams(inFileProperties, newFilename);
+	ret = audioData->write_streams(inFileProperties, newFilename, oldFilename);
 
 	delete audioData;
 	return ret;

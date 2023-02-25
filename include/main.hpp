@@ -30,6 +30,10 @@ enum ReturnCodes {
 
 #define NUM_CHANNELS_MAX (sizeof(uint16_t) * 8)
 
+bool is_mono();
+void set_filename_duplicate(std::string duplicate);
+std::string get_filename_duplicate();
+
 void print_param_warning(std::string param);
 void print_header_info(bool isStreamGeneration, uint32_t fileSize);
 

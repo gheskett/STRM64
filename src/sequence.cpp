@@ -17,7 +17,6 @@ using namespace std;
 #define ABS_PTR_SIZE 0x03
 
 
-static bool gIsMono = false;
 static int8_t gMuteScale = MUTE_SCALE_DEFAULT;
 static uint8_t gMasterVolume = MASTER_VOLUME_DEFAULT;
 
@@ -39,19 +38,17 @@ CHNHeader::CHNHeader(uint8_t channelIndex, uint8_t instId, uint8_t numChannels) 
 	instrument = instId;
 	
 	// TODO: make channel panning overrideable
-	if (gIsMono) {
+	if (is_mono()) {
 		pan = 0x3F;
-	}
-	else {
-	if (channelIndex % 2) { // right channel
-		pan = 0x7F;
-	}
-	else { // left/mono channel
-		if (channelIndex + 1 == numChannels) // mono channel
-			pan = 0x3F;
-		else // left channel
-			pan = 0x00;
-	}
+	} else {
+		if (channelIndex % 2) { // right channel
+			pan = 0x7F;
+		} else { // left/mono channel
+			if (channelIndex + 1 == numChannels) // mono channel
+				pan = 0x3F;
+			else // left channel
+				pan = 0x00;
+		}
 	}
 }
 CHNHeader::~CHNHeader() {
@@ -81,10 +78,6 @@ SEQFile::~SEQFile() {
 	delete[] chnHeader;
 }
 
-
-void seq_set_mono() {
-	gIsMono = true;
-}
 
 void seq_set_mute_scale(int64_t muteScale) {
 	if (muteScale < -128 || muteScale > 255) {

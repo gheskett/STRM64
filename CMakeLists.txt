@@ -6,6 +6,7 @@ add_compile_options(-Wall -g -O3 -DNDEBUG)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(library/vgmstream/include)
+include_directories(library/vgmstream/include/ext_includes/ffmpeg)
 
 set (CMAKE_CXX_STANDARD 17)
 

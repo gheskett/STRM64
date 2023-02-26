@@ -11,7 +11,8 @@ Usage: `STRM64 <input audio file> [optional arguments]`
 OPTIONAL ARGUMENTS
 ```
 -o [output filenames]                      (default: same as input, not including extension)
--r [sample rate]                           (default: same as source file (this does NOT resample the audio!))
+-r [sample rate]                           (default: same as source file (affects playback speed))
+-R [resample rate]                         (default: same as source file (affects internal resolution))
 -l [enable/disable loop]                   (default: either value in source audio or false)
 -s [loop start sample]                     (default: either value in source audio or 0)
 -t [loop start in microseconds]            (default: either value in source audio or 0)

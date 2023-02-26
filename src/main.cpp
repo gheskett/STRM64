@@ -11,7 +11,8 @@
  *
  * OPTIONAL ARGUMENTS
  *	-o [output filenames]                      (default: same as input, not including extension)
- *	-r [sample rate]                           (default: same as source file (this does NOT resample the audio!))
+ *	-r [sample rate]                           (default: same as source file (affects playback speed))
+ *	-R [resample rate]                         (default: same as source file (affects internal resolution))
  *	-l [enable/disable loop]                   (default: either value in source audio or false)
  *	-s [loop start sample]                     (default: either value in source audio or 0)
  *	-t [loop start in microseconds]            (default: either value in source audio or 0)
@@ -81,7 +82,8 @@ void printHelp() {
 		"\n"
 		"OPTIONAL ARGUMENTS\n"
 		"    -o [output filenames]                      (default: same as input, not including extension)\n"
-		"    -r [sample rate]                           (default: same as source file (this does NOT resample the audio!))\n"
+		"    -r [sample rate]                           (default: same as source file (affects playback speed))\n"
+		"    -R [resample rate]                         (default: same as source file (affects internal resolution))\n"
 		"    -l [enable/disable loop]                   (default: value in source audio or false)\n"
 		"    -s [loop start sample]                     (default: value in source audio or 0)\n"
 		"    -t [loop start in microseconds]            (default: value in source audio or 0)\n"
@@ -179,6 +181,7 @@ int parse_input_arguments() {
 			return RETURN_INVALID_ARGS;
 
 		char argVal = (char) tolower(arg[1]);
+		char argValNoCase = (char) arg[1];
 
 		// Standalone arguments
 		switch (argVal) {
@@ -218,8 +221,7 @@ int parse_input_arguments() {
 			if (arg.find("*") != string::npos || arg.find("?") != string::npos || arg.find("\"") != string::npos || colon > slash
 				|| arg.find("<") != string::npos || arg.find(">") != string::npos || arg.find("|") != string::npos) {
 				printf("WARNING: Output filename \"%s\" contains illegal format/characters. Output argument will be ignored.\n", arg.c_str());
-			}
-			else {
+			} else {
 				if (arg.find_last_of("/\\") + 1 == arg.length()) {
 					if (newFilename.find_last_of("/\\") != string::npos)
 						arg += newFilename.substr(newFilename.find_last_of("/\\") + 1, newFilename.length());
@@ -232,7 +234,10 @@ int parse_input_arguments() {
 			customNewFilename = true;
 			break;
 		case 'r':
-			set_sample_rate(parse_string_to_number(arg));
+			if (argValNoCase == 'R')
+				set_resample_rate(parse_string_to_number(arg));
+			else
+				set_sample_rate(parse_string_to_number(arg));
 			break;
 		case 'l':
 			set_enable_loop(parse_string_to_number(arg));

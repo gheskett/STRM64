@@ -18,6 +18,7 @@ using namespace std;
 
 
 // Override parameters
+static bool ovrdResample = false;
 static int64_t ovrdSampleRate = -1;
 static int64_t ovrdEnableLoop = -1;
 static int64_t ovrdLoopStartSamples = MAX_INT64_T;
@@ -29,9 +30,11 @@ static uint32_t gFileSize = 0;
 
 
 AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
-    sampleRate = inFileProperties->sample_rate;
-    enableLoop = inFileProperties->loop_flag;
-    numSamples = inFileProperties->num_samples;
+	resample = ovrdResample;
+	vgmstreamLoopPointMismatch = false; // Only used with data resampling to enforce a manual stream seek
+	sampleRate = inFileProperties->sample_rate;
+	enableLoop = inFileProperties->loop_flag;
+	numSamples = inFileProperties->num_samples;
 	numChannels = inFileProperties->channels;
 	
 	if (enableLoop) {
@@ -44,6 +47,13 @@ AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
 		loopStartSamples = 0;
 		loopEndSamples = numSamples;
 	}
+
+	resampledSampleRate = sampleRate;
+	resampledLoopStartSamples = loopStartSamples;
+	resampledLoopEndSamples = loopEndSamples;
+	resampledNumSamples = numSamples;
+
+	resampleContext = NULL;
 }
 AudioOutData::~AudioOutData() {
 
@@ -51,7 +61,7 @@ AudioOutData::~AudioOutData() {
 
 
 string AudioOutData::samples_to_us_print(uint64_t sampleOffset) {
-	uint64_t convTime = (uint64_t) (((long double) sampleOffset / (long double) sampleRate) * 1000000.0 + 0.5);
+	uint64_t convTime = (uint64_t) (((long double) sampleOffset / (long double) resampledSampleRate) * 1000000.0 + 0.5);
 
 	char buf[64];
 	if (convTime >= 3600000000) {
@@ -85,8 +95,8 @@ void AudioOutData::print_header_info() {
 	else
 		printf("    Cumulative File Size of AIFFs: %u bytes\n", gFileSize * (uint32_t) numChannels);
 
-	printf("    Sample Rate: %d Hz", sampleRate);
-	if (sampleRate > 32000)
+	printf("    Sample Rate: %d Hz", resampledSampleRate);
+	if (!resample && resampledSampleRate > 32000)
 		printf(" (Downsampling recommended!)");
 	printf("\n");
 
@@ -94,16 +104,16 @@ void AudioOutData::print_header_info() {
 	if (enableLoop) {
 		printf("true\n");
 
-		printf("    Starting Loop Point: %d Samples (Time: %s)\n", loopStartSamples,
-			samples_to_us_print(loopStartSamples).c_str());
+		printf("    Starting Loop Point: %d Samples (Time: %s)\n", resampledLoopStartSamples,
+			samples_to_us_print(resampledLoopStartSamples).c_str());
 
-		printf("    Ending Loop Point: %d Samples (Time: %s)\n", loopEndSamples,
-			samples_to_us_print(loopEndSamples).c_str());
+		printf("    Ending Loop Point: %d Samples (Time: %s)\n", resampledLoopEndSamples,
+			samples_to_us_print(resampledLoopEndSamples).c_str());
 	}
 	else {
 		printf("false\n");
 
-		int32_t samplesPadded = numSamples;
+		int32_t samplesPadded = resampledNumSamples;
 		if (samplesPadded % SAMPLE_COUNT_PADDING)
 			samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
 		printf("    End of Stream: %d Samples (Time: %s)\n", samplesPadded,
@@ -130,7 +140,18 @@ void set_sample_rate(int64_t sampleRate) {
 		return;
 	}
 
+	ovrdResample = false;
 	ovrdSampleRate = sampleRate;
+}
+
+void set_resample_rate(int64_t resampleRate) {
+	if (resampleRate <= 0) {
+		print_param_warning("resample rate");
+		return;
+	}
+
+	ovrdResample = true;
+	ovrdSampleRate = resampleRate;
 }
 
 void set_enable_loop(int64_t isLoopingEnabled) {
@@ -186,7 +207,7 @@ int64_t us_to_samples(int64_t sampleRate, int64_t timeOffset) {
 	return (int64_t) ((((long double) timeOffset / 1000000.0) * (long double) sampleRate) + 0.5);
 }
 
-int AudioOutData::check_properties(string newFilename) {
+int AudioOutData::check_properties(VGMSTREAM *inFileProperties, string newFilename) {
 	if (sampleRate <= 0) {
 		printf("ERROR: Input file has invalid sample rate value!\n");
 		return RETURN_STREAM_INVALID_PARAMETERS;
@@ -198,7 +219,9 @@ int AudioOutData::check_properties(string newFilename) {
 
 	// Overridden sample rate
 	if (ovrdSampleRate > 0) {
-		sampleRate = (int32_t) ovrdSampleRate;
+		resampledSampleRate = (int32_t) ovrdSampleRate;
+		if (!resample)
+			sampleRate = resampledSampleRate;
 	}
 
 	// Overridden loop flag
@@ -263,19 +286,55 @@ int AudioOutData::check_properties(string newFilename) {
 		}
 	}
 
+	// Calculate new metadata for use if resampling audio
+	if (resample) {
+		double ratio = (double) resampledSampleRate / (double) sampleRate;
+		resampledNumSamples = (numSamples * ratio) + 0.95; // round up most of the time, but not always
+		resampledLoopEndSamples = (loopEndSamples * ratio) + 0.95; // round up most of the time, but not always
+
+		if (enableLoop) {
+			resampledLoopStartSamples = resampledLoopEndSamples - (int32_t) (((double) (loopEndSamples - loopStartSamples) * ratio) + 0.5); // calculate based on difference rather than absolute
+			if (resampledLoopStartSamples < 0)
+				resampledLoopStartSamples = 0;
+
+			if (resampledLoopEndSamples <= resampledLoopStartSamples) {
+				resampledLoopEndSamples = resampledLoopStartSamples + 1;
+				resampledNumSamples = resampledLoopEndSamples; // numSamples and loopEndSamples are presumed matching by this point, so no additional check needed
+			}
+
+			if (
+				!inFileProperties->loop_flag ||
+				loopStartSamples != inFileProperties->loop_start_sample ||
+				loopEndSamples != inFileProperties->loop_end_sample
+			) {
+				vgmstreamLoopPointMismatch = true; // Force manual seeking in the stream once the loop end is reached
+			}
+		}
+	} else {
+		resampledNumSamples = numSamples;
+		resampledLoopEndSamples = loopEndSamples;
+		resampledLoopStartSamples = loopStartSamples;
+		vgmstreamLoopPointMismatch = false;
+	}
+
 	if (numSamples <= 0) {
 		printf("ERROR: Negative stream length value extends beyond the original stream length!\n");
 		printf("ATTEMPTED VALUE: %d\n", numSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
-	if (enableLoop && loopEndSamples <= loopStartSamples) {
-		printf("ERROR: Starting loop point must be smaller than ending loop point!\n");
-		printf("LOOP_START: %d, LOOP_END: %d\n", loopStartSamples, loopEndSamples);
+	if (resampledNumSamples <= 0) {
+		printf("ERROR: Output audio file size is too large after resampling!\n");
+		printf("ATTEMPTED VALUE: %d\n", resampledNumSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
-	if (enableLoop && loopStartSamples < 0) {
+	if (enableLoop && resampledLoopEndSamples <= resampledLoopStartSamples) {
+		printf("ERROR: Starting loop point must be smaller than ending loop point!\n");
+		printf("LOOP_START: %d, LOOP_END: %d\n", resampledLoopStartSamples, resampledLoopEndSamples);
+		return RETURN_STREAM_INVALID_PARAMETERS;
+	}
+	if (enableLoop && resampledLoopStartSamples < 0) {
 		printf("ERROR: Negative starting loop point value extends beyond the total stream length!\n");
-		printf("ATTEMPTED VALUE: %d\n", loopStartSamples);
+		printf("ATTEMPTED VALUE: %d\n", resampledLoopStartSamples);
 		return RETURN_STREAM_INVALID_PARAMETERS;
 	}
 
@@ -296,7 +355,7 @@ void AudioOutData::calculate_aiff_file_size() {
 
 	gFileSize += SSND_PRE_HEADER_SIZE;
 
-	int32_t samplesPadded = numSamples;
+	int32_t samplesPadded = resampledNumSamples;
 	if (samplesPadded % SAMPLE_COUNT_PADDING)
 		samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
 
@@ -336,7 +395,7 @@ void AudioOutData::write_comm_header(FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Number of Samples, padded to SAMPLE_COUNT_PADDING [0x0A]
-	tmp32BitValue = (uint32_t) numSamples;
+	tmp32BitValue = (uint32_t) resampledNumSamples;
 	if (tmp32BitValue % SAMPLE_COUNT_PADDING)
 		tmp32BitValue += SAMPLE_COUNT_PADDING - (tmp32BitValue % SAMPLE_COUNT_PADDING);
 	tmp32BitValue = bswap_32(tmp32BitValue);
@@ -346,9 +405,9 @@ void AudioOutData::write_comm_header(FILE *streamFile) {
 	tmp16BitValue = bswap_16((uint16_t) 16);
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
-	// Calculate sample rate stuffs, weirdly complicated to calculate manually
+	// Calculate sample rate stuffs manually; uses an 80-bit extended float value in the AIFF header
 	uint16_t sampleRateMultiple = SAMPLE_RATE_MULTIPLE_CONSTANT;
-	uint32_t sampleRateCurrent = (uint32_t) sampleRate;
+	uint32_t sampleRateCurrent = (uint32_t) resampledSampleRate;
 	uint64_t sampleRateRemainder = 0;
 	while (sampleRateCurrent < 0x8000) {
 		sampleRateMultiple--;
@@ -361,6 +420,9 @@ void AudioOutData::write_comm_header(FILE *streamFile) {
 		sampleRateCurrent >>= 1;
 	}
 
+	// NOTE: The endianness checks here are funky, since this "weird structure" has now been recognized to essentially be an 80-bit float.
+	// All 10 bytes of the data here probably need to be swapped as one, if there's ever any reason to implement little-endian exports.
+
 	// Sample Rate Exponential Multiple [0x10]
 	tmp16BitValue = bswap_16(sampleRateMultiple);
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
@@ -370,7 +432,7 @@ void AudioOutData::write_comm_header(FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Modified Sample Rate Remainder (6 bytes) [0x14]
-	fwrite(&sampleRateRemainder, 1, 6, streamFile); // Proper endianness check not used here, should be addressed later if it ever matters
+	fwrite(&sampleRateRemainder, 1, 6, streamFile); // FIXME: Missing endianness check. Will break if exporting as little-endian.
 }
 
 void AudioOutData::write_mark_header(FILE *streamFile) {
@@ -397,7 +459,7 @@ void AudioOutData::write_mark_header(FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Sample Offset (Loop Start Value) [0x0C]
-	tmp32BitValue = bswap_32((uint32_t) (loopStartSamples));
+	tmp32BitValue = bswap_32((uint32_t) (resampledLoopStartSamples));
 	fwrite(&tmp32BitValue, 4, 1, streamFile);
 
 	// Marker Id ("start" is 5 characters) [0x10]
@@ -412,7 +474,7 @@ void AudioOutData::write_mark_header(FILE *streamFile) {
 	fwrite(&tmp16BitValue, 2, 1, streamFile);
 
 	// Sample Offset (Loop End Value) [0x18]
-	tmp32BitValue = bswap_32((uint32_t) (loopEndSamples));
+	tmp32BitValue = bswap_32((uint32_t) (resampledLoopEndSamples));
 	fwrite(&tmp32BitValue, 4, 1, streamFile);
 
 	// Marker Id ("end" is 3 characters) [0x1C]
@@ -486,7 +548,7 @@ void AudioOutData::write_ssnd_header(FILE *streamFile) {
 	fwrite(ssndHeader, 1, 4, streamFile);
 
 	// SSND Size - 8 [0x04]
-	uint32_t samplesPadded = (uint32_t) numSamples;
+	uint32_t samplesPadded = (uint32_t) resampledNumSamples;
 	if (samplesPadded % SAMPLE_COUNT_PADDING)
 		samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
 	tmp32BitValue = bswap_32((uint32_t) (SSND_PRE_HEADER_SIZE + samplesPadded * sizeof(sample_t) - 8));
@@ -515,9 +577,165 @@ void AudioOutData::write_stream_headers(FILE **streamFiles) {
 	}
 }
 
-// TODO:
-void AudioOutData::resample_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
+void AudioOutData::cleanup_resample_context() {
+	if (resampleContext != NULL)
+		swr_free(&resampleContext);
+}
+
+int AudioOutData::init_audio_resampling(VGMSTREAM *inFileProperties, int inputBufferSize) {
+	uint64_t channelLayout = (1ULL << numChannels) - 1;
+
+	// Works with 18 channels maximum probably, TODO: research whether different bitflags affect how a thing is resampled if it matters for some reason
+	resampleContext = swr_alloc_set_opts(NULL, (int64_t) channelLayout, AV_SAMPLE_FMT_S16, resampledSampleRate,
+		(int64_t) channelLayout, AV_SAMPLE_FMT_S16, sampleRate, 0, NULL);
 	
+	if (resampleContext == NULL) {
+		printf("...FAILED!\nERROR: Could not allocate resampling context!\n");
+		swr_free(&resampleContext);
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	if (swr_init(resampleContext) != 0) {
+		printf("...FAILED!\nERROR: Could not initialize resampling context!\n");
+		swr_free(&resampleContext);
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+	
+	if (swr_is_initialized(resampleContext) == 0) {
+		printf("...FAILED!\nERROR: Resample context has not been properly initialized!\n");
+		cleanup_resample_context();
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	return RETURN_SUCCESS;
+}
+
+int AudioOutData::resample_audio_data(const sample_t *inputAudioBuffer, sample_t *audioOutBuffer, sample_t *printBuffer,
+ FILE **streamFiles, int inputBufferSize, int outputBufferSamples, uint32_t samplesPadded, uint32_t *totalSamplesProcessed) {
+	if (swr_is_initialized(resampleContext) == 0) {
+		printf("...FAILED!\nERROR: Resample context has not been properly initialized!\n");
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	int result = swr_convert(resampleContext, (uint8_t**) &audioOutBuffer, outputBufferSamples, (const uint8_t**) &inputAudioBuffer, inputBufferSize);
+
+	if (result < 0) {
+		printf("...FAILED!\nERROR: Unable to resample given input buffer!\n");
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	if (result > outputBufferSamples) {
+		printf("...FAILED!\nERROR: Memory overflow!\n");
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	outputBufferSamples = result;
+
+	// Eliminate any unwanted data for padding
+	int64_t samplesToPadStart = ((int64_t) resampledNumSamples - *totalSamplesProcessed) * (int64_t) numChannels;
+	if (samplesToPadStart < 0)
+		samplesToPadStart = 0;
+	for (int64_t j = samplesToPadStart; j < (int64_t) outputBufferSamples * (int64_t) numChannels; j++)
+		audioOutBuffer[j] = 0;
+
+	for (int32_t i = 0; i < numChannels; i++) {
+		for (uint64_t j = 0; j < (uint64_t) outputBufferSamples; j++)
+			printBuffer[j] = (sample_t) bswap_16((uint16_t) audioOutBuffer[j * numChannels + i]);
+
+		if (*totalSamplesProcessed + outputBufferSamples > (uint32_t) samplesPadded)
+			fwrite(printBuffer, sizeof(sample_t), samplesPadded - *totalSamplesProcessed, streamFiles[i]);
+		else
+			fwrite(printBuffer, sizeof(sample_t), outputBufferSamples, streamFiles[i]);
+	}
+
+	*totalSamplesProcessed += outputBufferSamples;
+
+	return RETURN_SUCCESS;
+}
+
+int AudioOutData::write_resampled_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
+	uint32_t resampledSamplesPadded = (uint32_t) resampledNumSamples;
+	if (resampledSamplesPadded % SAMPLE_COUNT_PADDING)
+		resampledSamplesPadded += SAMPLE_COUNT_PADDING - (resampledSamplesPadded % SAMPLE_COUNT_PADDING);
+
+	uint32_t bufferSize = MIN_PRINT_BUFFER_SIZE;
+	if (MIN_PRINT_BUFFER_SIZE < SAMPLE_COUNT_PADDING)
+		bufferSize = SAMPLE_COUNT_PADDING;
+
+	sample_t *audioBuffer = new (nothrow) sample_t[bufferSize * (size_t) numChannels];
+	if (audioBuffer == nullptr) {
+		printf("...FAILED!\nERROR: Out of memory!\n");
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	int retCode = init_audio_resampling(inFileProperties, bufferSize);
+	if (retCode != RETURN_SUCCESS) {
+		delete[] audioBuffer;
+		return retCode;
+	}
+
+	int outputBufferSamples = swr_get_out_samples(resampleContext, bufferSize);
+
+	sample_t *audioOutBuffer = new (nothrow) sample_t[(size_t) outputBufferSamples * (size_t) numChannels];
+	if (audioOutBuffer == nullptr) {
+		printf("...FAILED!\nERROR: Out of memory!\n");
+		cleanup_resample_context();
+		delete[] audioBuffer;
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	sample_t *printBuffer = new (nothrow) sample_t[(size_t) outputBufferSamples];
+	if (printBuffer == nullptr) {
+		printf("...FAILED!\nERROR: Out of memory!\n");
+		cleanup_resample_context();
+		delete[] audioBuffer;
+		delete[] audioOutBuffer;
+		return RETURN_STREAM_FAILED_RESAMPLING;
+	}
+
+	uint32_t samplesProcessed = 0;
+	uint32_t resampledSamplesProcessed = 0;
+
+	while (true) {
+		int64_t samplesRemaining = numSamples - (int64_t) samplesProcessed;
+		render_vgmstream(audioBuffer, bufferSize, inFileProperties);
+
+		if (enableLoop && vgmstreamLoopPointMismatch && samplesRemaining < bufferSize) {
+			int64_t loopSampleDifference = loopEndSamples - loopStartSamples;
+
+			while (samplesRemaining < bufferSize) {
+				sample_t *startOffset = &(audioBuffer[((int64_t) bufferSize - samplesRemaining) * numChannels]);
+				seek_vgmstream(inFileProperties, loopStartSamples);
+				render_vgmstream(startOffset, samplesRemaining, inFileProperties);
+				samplesProcessed = loopStartSamples + (bufferSize - samplesRemaining);
+				samplesRemaining += loopSampleDifference;
+			}
+		} else {
+			samplesProcessed += bufferSize;
+		}
+
+		int retCode = resample_audio_data((const sample_t*) audioBuffer, audioOutBuffer, printBuffer, streamFiles,
+		 (int) bufferSize, outputBufferSamples, resampledSamplesPadded, &resampledSamplesProcessed);
+
+		if (retCode != RETURN_SUCCESS) {
+			cleanup_resample_context();
+			delete[] audioBuffer;
+			delete[] audioOutBuffer;
+			delete[] printBuffer;
+
+			return retCode;
+		}
+
+		if (resampledSamplesProcessed >= resampledSamplesPadded)
+			break;
+	}
+
+	cleanup_resample_context();
+	delete[] printBuffer;
+	delete[] audioOutBuffer;
+	delete[] audioBuffer;
+
+	return RETURN_SUCCESS;
 }
 
 void AudioOutData::write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles) {
@@ -529,22 +747,24 @@ void AudioOutData::write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFi
 	if (MIN_PRINT_BUFFER_SIZE < SAMPLE_COUNT_PADDING)
 		bufferSize = SAMPLE_COUNT_PADDING;
 
-	sample_t *audioBuffer = new sample_t[bufferSize * (size_t) inFileProperties->channels];
+	sample_t *audioBuffer = new sample_t[bufferSize * (size_t) numChannels];
 
-	sample_t **printBuffer = new sample_t*[(size_t) inFileProperties->channels];
-	for (int i = 0; i < inFileProperties->channels; i++)
+	sample_t **printBuffer = new sample_t*[(size_t) numChannels];
+	for (int i = 0; i < numChannels; i++)
 		printBuffer[i] = new sample_t[bufferSize];
 
 	for (uint32_t samplesProcessed = 0; samplesProcessed < samplesPadded; samplesProcessed += bufferSize) {
 		render_vgmstream(audioBuffer, bufferSize, inFileProperties);
 
 		// Not using inFileProperties->num_samples here is by intention, so padding is composed of zeros rather than unwanted audio data.
-		for (uint64_t j = (((uint64_t) numSamples - samplesProcessed) * (uint64_t) inFileProperties->channels);
-		 j < (uint64_t) bufferSize * (uint64_t) inFileProperties->channels; j++)
+		int64_t samplesToPadStart = ((int64_t) numSamples - samplesProcessed) * (int64_t) numChannels;
+		if (samplesToPadStart < 0)
+			samplesToPadStart = 0;
+		for (int64_t j = samplesToPadStart; j < (int64_t) bufferSize * (int64_t) numChannels; j++)
 			audioBuffer[j] = 0;
 
-		for (uint32_t j = 0; j < bufferSize * (uint32_t) inFileProperties->channels; j++)
-			printBuffer[j % inFileProperties->channels][j / inFileProperties->channels] = (sample_t) bswap_16((uint16_t) audioBuffer[j]);
+		for (uint32_t j = 0; j < bufferSize * (uint32_t) numChannels; j++)
+			printBuffer[j % numChannels][j / numChannels] = (sample_t) bswap_16((uint16_t) audioBuffer[j]);
 
 		for (int32_t j = 0; j < numChannels; j++)
 			if (samplesProcessed + bufferSize > (uint32_t) samplesPadded)
@@ -553,7 +773,7 @@ void AudioOutData::write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFi
 				fwrite(printBuffer[j], sizeof(sample_t), bufferSize, streamFiles[j]);
 	}
 
-	for (int i = 0; i < inFileProperties->channels; i++)
+	for (int i = 0; i < numChannels; i++)
 		delete[] printBuffer[i];
 	delete[] printBuffer;
 	delete[] audioBuffer;
@@ -603,12 +823,20 @@ int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename,
 
 	write_stream_headers(streamFiles);
 
-	write_audio_data(inFileProperties, streamFiles);
+	int retCode = RETURN_SUCCESS;
+	if (resample)
+		retCode = write_resampled_audio_data(inFileProperties, streamFiles);
+	else
+		write_audio_data(inFileProperties, streamFiles);
 
 	for (int i = 0; i < numChannels; i++)
 		fclose(streamFiles[i]);
 
 	delete[] streamFiles;
+
+	if (retCode != RETURN_SUCCESS) {
+		return retCode;
+	}
 
 	printf("...DONE!\n");
 
@@ -621,7 +849,7 @@ int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename, string
 
 	AudioOutData *audioData = new AudioOutData(inFileProperties);
 
-	int ret = audioData->check_properties(newFilename);
+	int ret = audioData->check_properties(inFileProperties, newFilename);
 	if (ret) {
 		delete audioData;
 		return ret;

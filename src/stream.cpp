@@ -783,9 +783,9 @@ int AudioOutData::write_resampled_audio_data(VGMSTREAM *inFileProperties, FILE *
 			int64_t loopSampleDifference = loopEndSamples - loopStartSamples;
 
 			while (samplesRemaining < bufferSize) {
-				sample_t *startOffset = &(audioBuffer[((int64_t) bufferSize - samplesRemaining) * numChannels]);
+				sample_t *startOffset = &(audioBuffer[samplesRemaining * numChannels]);
 				seek_vgmstream(inFileProperties, loopStartSamples);
-				render_vgmstream(startOffset, samplesRemaining, inFileProperties);
+				render_vgmstream(startOffset, (int64_t) bufferSize - samplesRemaining, inFileProperties);
 				samplesProcessed = loopStartSamples + (bufferSize - samplesRemaining);
 				samplesRemaining += loopSampleDifference;
 			}

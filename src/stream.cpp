@@ -22,8 +22,8 @@ using namespace std;
 
 
 // Override parameters
-static bool ovrdResample = false;
 static int64_t ovrdSampleRate = -1;
+static int64_t ovrdResampleRate = -1;
 static int64_t ovrdEnableLoop = -1;
 static int64_t ovrdLoopStartSamples = INT64_MAX;
 static int64_t ovrdLoopEndSamples = INT64_MAX;
@@ -34,7 +34,7 @@ static uint32_t gFileSize = 0;
 
 
 AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
-	resample = ovrdResample;
+	resample = (ovrdResampleRate > 0 ? true : false);
 	vgmstreamLoopPointMismatch = false; // Only used with data resampling to enforce a manual stream seek
 	sampleRate = inFileProperties->sample_rate;
 	enableLoop = inFileProperties->loop_flag;
@@ -161,7 +161,7 @@ void AudioOutData::print_header_info() {
 		printf("    Cumulative File Size of AIFFs: %u bytes\n", gFileSize * (uint32_t) numChannels);
 
 	printf("    Sample Rate: %d Hz", resampledSampleRate);
-	if (ovrdSampleRate <= 0 && resampledSampleRate > 32000)
+	if (!resample && ovrdSampleRate <= 0 && resampledSampleRate > 32000)
 		printf(" (Downsampling recommended! [-R 32000])");
 	printf("\n");
 
@@ -205,7 +205,6 @@ void set_sample_rate(int64_t sampleRate) {
 		return;
 	}
 
-	ovrdResample = false;
 	ovrdSampleRate = sampleRate;
 }
 
@@ -215,8 +214,7 @@ void set_resample_rate(int64_t resampleRate) {
 		return;
 	}
 
-	ovrdResample = true;
-	ovrdSampleRate = resampleRate;
+	ovrdResampleRate = resampleRate;
 }
 
 void set_enable_loop(int64_t isLoopingEnabled) {
@@ -249,13 +247,25 @@ void set_loop_end_samples(int64_t samples) {
 	ovrdLoopEndMicro = INT64_MAX;
 }
 
-void set_loop_start_microseconds(int64_t microseconds) {
+void set_loop_start_timestamp(string arg) {
+	int64_t microseconds = timestamp_to_us(arg);
+	if (microseconds == INT64_MIN) {
+		print_param_warning("loop start (timestamp)");
+		return;
+	}
+
 	ovrdEnableLoop = 1;
 	ovrdLoopStartMicro = microseconds;
 	ovrdLoopStartSamples = INT64_MAX;
 }
 
-void set_loop_end_microseconds(int64_t microseconds) {
+void set_loop_end_timestamp(string arg) {
+	int64_t microseconds = timestamp_to_us(arg);
+	if (microseconds == INT64_MIN) {
+		print_param_warning("loop end (timestamp)");
+		return;
+	}
+
 	ovrdLoopEndMicro = microseconds;
 	ovrdLoopEndSamples = INT64_MAX;
 }
@@ -285,8 +295,12 @@ int AudioOutData::check_properties(VGMSTREAM *inFileProperties, string newFilena
 	// Overridden sample rate
 	if (ovrdSampleRate > 0) {
 		resampledSampleRate = (int32_t) ovrdSampleRate;
-		if (!resample)
-			sampleRate = resampledSampleRate;
+		sampleRate = resampledSampleRate;
+	}
+
+	// Resample rate
+	if (resample) {
+		resampledSampleRate = (int32_t) ovrdResampleRate;
 	}
 
 	// Overridden loop flag

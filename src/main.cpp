@@ -174,7 +174,6 @@ string replace_spaces(string inStr) {
 int parse_input_arguments() {
 	bool isPrintHelp = false;
 	int32_t slash, colon;
-	int64_t timestampResult;
 
 	for (size_t i = 0; i < cmdArgs.size(); i++) {
 		string arg = cmdArgs.at(i);
@@ -247,25 +246,13 @@ int parse_input_arguments() {
 			set_loop_start_samples(parse_string_to_number(arg));
 			break;
 		case 't':
-			timestampResult = timestamp_to_us(arg);
-			if (timestampResult == INT64_MIN) {
-				print_param_warning("loop start timestamp");
-				break;
-			}
-
-			set_loop_start_microseconds(timestampResult);
+			set_loop_start_timestamp(arg);
 			break;
 		case 'e':
 			set_loop_end_samples(parse_string_to_number(arg));
 			break;
 		case 'f':
-			timestampResult = timestamp_to_us(arg);
-			if (timestampResult == INT64_MIN) {
-				print_param_warning("loop end timestamp");
-				break;
-			}
-
-			set_loop_end_microseconds(timestampResult);
+			set_loop_end_timestamp(arg);
 			break;
 		case 'v':
 			seq_set_master_volume(parse_string_to_number(arg));

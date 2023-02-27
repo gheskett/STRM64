@@ -54,8 +54,8 @@ void set_resample_rate(int64_t resampleRate);
 void set_enable_loop(int64_t isLoopingEnabled);
 void set_loop_start_samples(int64_t samples);
 void set_loop_end_samples(int64_t samples);
-void set_loop_start_microseconds(int64_t microseconds);
-void set_loop_end_microseconds(int64_t microseconds);
+void set_loop_start_timestamp(std::string arg);
+void set_loop_end_timestamp(std::string arg);
 int64_t timestamp_to_us(std::string dur);
 
 #endif

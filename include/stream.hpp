@@ -56,5 +56,6 @@ void set_loop_start_samples(int64_t samples);
 void set_loop_end_samples(int64_t samples);
 void set_loop_start_microseconds(int64_t microseconds);
 void set_loop_end_microseconds(int64_t microseconds);
+int64_t timestamp_to_us(std::string dur);
 
 #endif

@@ -7,8 +7,6 @@
 
 using namespace std;
 
-#define MAX_INT64_T 0x7FFFFFFFFFFFFFFFLL
-
 #define SAMPLE_RATE_MULTIPLE_CONSTANT 0x400E
 #define FORM_HEADER_SIZE 0x0C
 #define COMM_HEADER_SIZE 0x1A
@@ -16,15 +14,21 @@ using namespace std;
 #define INST_HEADER_SIZE 0x1C
 #define SSND_PRE_HEADER_SIZE 0x10
 
+#define MICROSECOND_DECIMALS 6
+#define TIME_SECOND          1000000LL // microseconds
+#define TIME_MINUTE          (TIME_SECOND * 60)
+#define TIME_HOUR            (TIME_MINUTE * 60)
+#define TIME_DAY             (TIME_HOUR * 24)
+
 
 // Override parameters
 static bool ovrdResample = false;
 static int64_t ovrdSampleRate = -1;
 static int64_t ovrdEnableLoop = -1;
-static int64_t ovrdLoopStartSamples = MAX_INT64_T;
-static int64_t ovrdLoopEndSamples = MAX_INT64_T;
-static int64_t ovrdLoopStartMicro = MAX_INT64_T;
-static int64_t ovrdLoopEndMicro = MAX_INT64_T;
+static int64_t ovrdLoopStartSamples = INT64_MAX;
+static int64_t ovrdLoopEndSamples = INT64_MAX;
+static int64_t ovrdLoopStartMicro = INT64_MAX;
+static int64_t ovrdLoopEndMicro = INT64_MAX;
 
 static uint32_t gFileSize = 0;
 
@@ -87,6 +91,67 @@ string AudioOutData::samples_to_us_print(uint64_t sampleOffset) {
 	return ret;
 }
 
+// Calculates time duration to use in microseconds (string to int64_t)
+int64_t timestamp_to_us(string timestamp) {
+	int64_t days = 0;
+	int64_t hours = 0;
+	int64_t minutes = 0;
+	int64_t seconds = 0;
+	int64_t microseconds = 0;
+
+	if (timestamp.find("::") != string::npos || timestamp.find(":.") != string::npos)
+		return INT64_MIN;
+
+	size_t period = timestamp.find(".");
+	if (period != string::npos) {
+		for (size_t i = timestamp.length(); i < period + 1 + MICROSECOND_DECIMALS; ++i)
+			timestamp += "0"; // Tack on zeros to make the decimal an artificially large number. Does not respect invalid character inputs.
+
+		microseconds = strtoll(timestamp.substr(period + 1, MICROSECOND_DECIMALS).c_str(), NULL, 10);
+		timestamp = timestamp.substr(0, period);
+	}
+
+	int colonCount = 0;
+	size_t index = 0;
+	while (true) {
+		index = timestamp.find(":", index);
+		if (index == string::npos)
+			break;
+
+		colonCount++;
+		index += 1;
+	}
+	if (colonCount > 3)
+		return INT64_MIN;
+
+	index = 0;
+	if (colonCount == 3) {
+		size_t indLast = index;
+		index = timestamp.find(":", index) + 1;
+		days = strtoll(timestamp.substr(indLast, index - indLast - 1).c_str(), NULL, 10);
+		days = days * TIME_DAY;
+		colonCount--;
+	}
+	if (colonCount == 2) {
+		size_t indLast = index;
+		index = timestamp.find(":", index) + 1;
+		hours = strtoll(timestamp.substr(indLast, index - indLast - 1).c_str(), NULL, 10);
+		hours = hours * TIME_HOUR;
+		colonCount--;
+	}
+	if (colonCount == 1) {
+		size_t indLast = index;
+		index = timestamp.find(":", index) + 1;
+		minutes = strtoll(timestamp.substr(indLast, index - indLast - 1).c_str(), NULL, 10);
+		minutes = minutes * TIME_MINUTE;
+		colonCount--;
+	}
+	seconds = strtoll(timestamp.substr(index).c_str(), NULL, 10);
+	seconds *= TIME_SECOND;
+
+	return days + hours + minutes + seconds + microseconds;
+}
+
 void AudioOutData::print_header_info() {
 	printf("\n");
 
@@ -96,8 +161,8 @@ void AudioOutData::print_header_info() {
 		printf("    Cumulative File Size of AIFFs: %u bytes\n", gFileSize * (uint32_t) numChannels);
 
 	printf("    Sample Rate: %d Hz", resampledSampleRate);
-	if (!resample && resampledSampleRate > 32000)
-		printf(" (Downsampling recommended!)");
+	if (ovrdSampleRate <= 0 && resampledSampleRate > 32000)
+		printf(" (Downsampling recommended! [-R 32000])");
 	printf("\n");
 
 	printf("    Is Looped: ");
@@ -171,7 +236,7 @@ void set_loop_start_samples(int64_t samples) {
 
 	ovrdEnableLoop = 1;
 	ovrdLoopStartSamples = samples;
-	ovrdLoopStartMicro = MAX_INT64_T;
+	ovrdLoopStartMicro = INT64_MAX;
 }
 
 void set_loop_end_samples(int64_t samples) {
@@ -181,18 +246,18 @@ void set_loop_end_samples(int64_t samples) {
 	}
 
 	ovrdLoopEndSamples = samples;
-	ovrdLoopEndMicro = MAX_INT64_T;
+	ovrdLoopEndMicro = INT64_MAX;
 }
 
 void set_loop_start_microseconds(int64_t microseconds) {
 	ovrdEnableLoop = 1;
 	ovrdLoopStartMicro = microseconds;
-	ovrdLoopStartSamples = MAX_INT64_T;
+	ovrdLoopStartSamples = INT64_MAX;
 }
 
 void set_loop_end_microseconds(int64_t microseconds) {
 	ovrdLoopEndMicro = microseconds;
-	ovrdLoopEndSamples = MAX_INT64_T;
+	ovrdLoopEndSamples = INT64_MAX;
 }
 
 char get_num_to_hex(uint8_t num) {
@@ -234,7 +299,7 @@ int AudioOutData::check_properties(VGMSTREAM *inFileProperties, string newFilena
 	}
 
 	// Overridden total sample count / end loop point
-	if (ovrdLoopEndSamples != MAX_INT64_T) {
+	if (ovrdLoopEndSamples != INT64_MAX) {
 		if (ovrdLoopEndSamples > 0) {
 			if (numSamples > ovrdLoopEndSamples)
 				numSamples = (int32_t) ovrdLoopEndSamples;
@@ -246,7 +311,7 @@ int AudioOutData::check_properties(VGMSTREAM *inFileProperties, string newFilena
 			loopEndSamples = numSamples;
 	}
 	// Overridden total sample count / end loop point, represented in microseconds
-	else if (ovrdLoopEndMicro != MAX_INT64_T) {
+	else if (ovrdLoopEndMicro != INT64_MAX) {
 		int64_t tmpNumSamples = us_to_samples(sampleRate, ovrdLoopEndMicro);
 		if (tmpNumSamples > 0) {
 			if (numSamples > tmpNumSamples)
@@ -270,14 +335,14 @@ int AudioOutData::check_properties(VGMSTREAM *inFileProperties, string newFilena
 	// Loop Start, only handled if looping is enabled
 	if (enableLoop) {
 		// Overridden start loop point
-		if (ovrdLoopStartSamples != MAX_INT64_T) {
+		if (ovrdLoopStartSamples != INT64_MAX) {
 			if (ovrdLoopStartSamples >= 0)
 				loopStartSamples = (int32_t) ovrdLoopStartSamples;
 			else
 				loopStartSamples = (int32_t) ovrdLoopStartSamples + numSamples;
 		}
 		// Overridden start loop point, represented in microseconds
-		else if (ovrdLoopStartMicro != MAX_INT64_T) {
+		else if (ovrdLoopStartMicro != INT64_MAX) {
 			int64_t tmpNumSamples = us_to_samples(sampleRate, ovrdLoopStartMicro);
 			if (tmpNumSamples >= 0)
 				loopStartSamples = (int32_t) tmpNumSamples;

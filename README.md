@@ -10,32 +10,32 @@ Usage: `STRM64 <input audio file> [optional arguments]`
 
 OPTIONAL ARGUMENTS
 ```
--o [output filenames]                      (default: same as input, not including extension)
--r [sample rate]                           (default: same as source file (affects playback speed))
--R [resample rate]                         (default: same as source file (affects internal resolution))
--l [enable/disable loop]                   (default: either value in source audio or false)
--s [loop start sample]                     (default: either value in source audio or 0)
--t [loop start in microseconds]            (default: either value in source audio or 0)
--e [loop end sample / total samples]       (default: number of samples in source file)
--f [loop end in microseconds / total time] (default: length of source audio)
--v [master volume of sequence]             (default: 127)
--c [mute scale of sequence]                (default: 63)
--m                                         (set all sequence channels to mono)
--x                                         (don't generate stream files)
--y                                         (don't generate sequence file)
--z                                         (don't generate soundbank file)
--h                                         (show help text)
+-o [output filenames]                (default: same as input, not including extension)
+-r [sample rate]                     (default: same as source file (affects playback speed))
+-R [resample rate]                   (default: same as source file (affects internal resolution))
+-l [enable/disable loop]             (default: either value in source audio or false)
+-s [loop start sample]               (default: either value in source audio or 0)
+-t [loop start timestamp]            (default: either value in source audio or 0)
+-e [loop end sample / total samples] (default: number of samples in source file)
+-f [loop end timestamp / total time] (default: length of source audio)
+-v [master volume of sequence]       (default: 127)
+-c [mute scale of sequence]          (default: 63)
+-m                                   (set all sequence channels to mono)
+-x                                   (don't generate stream files)
+-y                                   (don't generate sequence file)
+-z                                   (don't generate soundbank file)
+-h                                   (show help text)
 ```
 
 USAGE EXAMPLES
 ```
 STRM64 inputfile.wav -o custom_outfiles -s 158462 -e 7485124
-STRM64 "spaces not recommended.wav" -l 1 -f 95000000
+STRM64 "spaces not recommended.wav" -l 1 -f 1:35.23
 STRM64 inputfile.brstm -l false -e 0x10000
 STRM64 custom_soundeffect.wav -y -z
 ```
 
-Note: STRM64 uses vgmstream to parse audio. You may need to install additional libraries for certain conversions to be supported. For the Windows build of this application, the bundled dlls are mandatory for this program to run. You may need also to find additional dlls and add them to the folder (Windows) or install additional libraries such as FFmpeg to run the build (Linux).
+Note: STRM64 uses vgmstream to parse audio. You may need to install ffmpeg for certain conversions to be supported. For the Windows build of this application, the bundled dlls are mandatory for this program to run. You may need also to find additional dlls and add them to the folder (Windows) or install additional libraries such as FFmpeg to run the build (Linux).
 
 ## Building
 

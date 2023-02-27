@@ -32,10 +32,11 @@ USAGE EXAMPLES
 STRM64 inputfile.wav -o custom_outfiles -s 158462 -e 7485124
 STRM64 "spaces not recommended.wav" -l 1 -f 1:35.23
 STRM64 inputfile.brstm -l false -e 0x10000
+STRM64 inputfile.mp3 -R 32000 -t 0
 STRM64 custom_soundeffect.wav -y -z
 ```
 
-Note: STRM64 uses vgmstream to parse audio. You may need to install ffmpeg for certain conversions to be supported. For the Windows build of this application, the bundled dlls are mandatory for this program to run. You may need also to find additional dlls and add them to the folder (Windows) or install additional libraries such as FFmpeg to run the build (Linux).
+Note: STRM64 uses vgmstream to parse audio. You may need to install ffmpeg for certain conversions to be supported. For the Windows build of this application, the bundled dlls are mandatory for this program to run. You may need also to find additional dlls and add them to the folder (Windows) or install additional libraries such as ffmpeg to run the build (Linux).
 
 ## Building
 

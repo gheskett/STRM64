@@ -4,6 +4,8 @@
 
 This is a command line tool designed to generate files required for emulation of streamed audio within Super Mario 64. STRM64 is compatible with any multichannel audio file up to 16 channels.
 
+Development on a new GUI for STRM64 has been started: [github.com/thecozies/STRM64-GUI](https://github.com/thecozies/STRM64-GUI)
+
 ## How to Use
 
 Usage: `STRM64 <input audio file> [optional arguments]`
@@ -36,7 +38,7 @@ STRM64 inputfile.mp3 -R 32000 -t 0
 STRM64 custom_soundeffect.wav -y -z
 ```
 
-Note: STRM64 uses vgmstream to parse audio. You may need to install ffmpeg for certain conversions to be supported. For the Windows build of this application, the bundled dlls are mandatory for this program to run. You may need also to find additional dlls and add them to the folder (Windows) or install additional libraries such as ffmpeg to run the build (Linux).
+Note: STRM64 uses [vgmstream](https://github.com/vgmstream/vgmstream) to parse audio. You may need to install [ffmpeg](https://ffmpeg.org/) for certain conversions to be supported, or for the build to run at all. For the Windows build of this application, the bundled dlls are mandatory for this program to run.
 
 ## Building
 

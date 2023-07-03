@@ -35,7 +35,7 @@ SEQHeader::~SEQHeader() {
 }
 
 CHNHeader::CHNHeader(uint8_t channelIndex, uint8_t instId, uint8_t numChannels) {
-	channelId = NUM_CHANNELS_MAX - numChannels + channelIndex;
+	channelId = channelIndex;
 	instrument = instId;
 	
 	// TODO: make channel panning overrideable
@@ -125,7 +125,7 @@ void SEQHeader::write_seq_header(FILE *seqFile) {
 	// Calculate channels being used with sequence. This intentionally generates channels from MAX - n to MAX, rather than from 0 to n.
 	// I still haven't established whether this actually matters, but it doesn't really hurt either, so I'm keeping it this way for now.
 	uint16_t enabledChannels = 0;
-	for (uint8_t i = NUM_CHANNELS_MAX - this->channelCount; i < NUM_CHANNELS_MAX; i++)
+	for (uint8_t i = 0; i < this->channelCount; i++)
 		enabledChannels |= (1 << i);
 
 	// How the sequence behaves when pausing the game (0x20 softens music on pause)
@@ -147,7 +147,7 @@ void SEQHeader::write_seq_header(FILE *seqFile) {
 
 	// Absolute channel pointers
 	uint16_t ptrOffset = seqHeaderSize;
-	for (uint8_t i = NUM_CHANNELS_MAX - this->channelCount; i < NUM_CHANNELS_MAX; i++) {
+	for (uint8_t i = 0; i < this->channelCount; i++) {
 		header[headerPtr++] = (uint8_t) (SEQ_CHANNEL_POINTER + i);
 		header[headerPtr++] = (uint8_t) (ptrOffset >> 8);
 		header[headerPtr++] = (uint8_t) ptrOffset;

@@ -3,6 +3,7 @@
 
 #include "main.hpp"
 #include "stream.hpp"
+#include "sequence.hpp"
 #include "bswp.hpp"
 
 using namespace std;
@@ -185,8 +186,11 @@ void AudioOutData::print_header_info() {
 			samples_to_us_print(samplesPadded).c_str());
 	}
 
+	uint8_t seqChannelCount = seq_get_num_channels();
 	printf("    Number of Channels: %d", numChannels);
-	if (!is_mono()) {
+	if (seqChannelCount != 0 && seqChannelCount != numChannels) {
+		printf(" (Sequence: %d)", seqChannelCount);
+	} else if (!is_mono()) {
 		if (numChannels == 1)
 			printf(" (mono)");
 		else if (numChannels == 2)

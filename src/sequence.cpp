@@ -17,6 +17,7 @@ using namespace std;
 #define ABS_PTR_SIZE 0x03
 
 
+static uint8_t gNumChannels = 0;
 static int8_t gMuteScale = MUTE_SCALE_DEFAULT;
 static uint8_t gMasterVolume = MASTER_VOLUME_DEFAULT;
 
@@ -78,6 +79,20 @@ SEQFile::~SEQFile() {
 	delete[] chnHeader;
 }
 
+uint8_t seq_get_num_channels() {
+	return gNumChannels;
+}
+
+bool seq_set_num_channels(int64_t numChannels) {
+	if (numChannels <= 0 || numChannels > (int64_t) NUM_CHANNELS_MAX) {
+		print_param_warning("sequence channel count");
+		return false;
+	}
+
+	gNumChannels = (uint8_t) numChannels;
+
+	return true;
+}
 
 void seq_set_mute_scale(int64_t muteScale) {
 	if (muteScale < -128 || muteScale > 255) {
@@ -95,6 +110,10 @@ void seq_set_master_volume(int64_t volume) {
 		print_param_warning("sequence master volume");
 		return;
 	}
+	if (volume > 127) {
+		printf("WARNING: It is not recommended to set a sequence channel volume greater than 127!\n");
+	}
+
 	gMasterVolume = (uint8_t) volume;
 }
 
@@ -327,12 +346,18 @@ int SEQFile::write_sequence() {
 int generate_new_sequence(string filename, uint16_t instFlags) {
 	uint8_t numChannels = 0;
 
-	for (uint8_t i = 0; i < NUM_CHANNELS_MAX; i++) {
-		if (!((1 << i) & instFlags))
-			continue;
+	if (gNumChannels == 0) {
+		for (uint8_t i = 0; i < NUM_CHANNELS_MAX; i++) {
+			if (!((1 << i) & instFlags))
+				continue;
 
-		numChannels++;
+			numChannels++;
+		}
+	} else {
+		numChannels = gNumChannels;
+		instFlags = (1ULL << numChannels) - 1ULL;
 	}
+
 	if (numChannels == 0)
 		return RETURN_SEQUENCE_NO_CHANNELS;
 

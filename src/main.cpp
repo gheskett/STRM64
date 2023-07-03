@@ -18,8 +18,9 @@
  *	-t [loop start timestamp]            (default: either value in source audio or 0)
  *	-e [loop end sample / total samples] (default: number of samples in source file)
  *	-f [loop end timestamp / total time] (default: length of source audio)
+ *	-c [number of channels in sequence]  (default: same as source file)
+ *	-u [mute scale of sequence]          (default: 63)
  *	-v [master volume of sequence]       (default: 127)
- *	-c [mute scale of sequence]          (default: 63)
  *	-m                                   (set all sequence channels to mono)
  *	-x                                   (don't generate stream files)
  *	-y                                   (don't generate sequence file)
@@ -67,6 +68,7 @@ bool generateSoundbank = true;
 bool printedHelp = false;
 
 static bool forcedMono = false;
+static uint8_t channelCountOverride = 0;
 static string duplicateStringName = "";
 
 uint16_t gInstFlags = 0x0000;
@@ -79,33 +81,34 @@ void printHelp() {
 	printedHelp = true;
 
 	string print = "\n"
-		"Usage: " + parsedExeName + " <input audio file> [optional arguments]\n"
-		"\n"
-		"OPTIONAL ARGUMENTS\n"
-		"    -o [output filenames]                (default: same as input, not including extension)\n"
-		"    -r [sample rate]                     (default: same as source file (affects playback speed))\n"
-		"    -R [resample rate]                   (default: same as source file (affects internal resolution))\n"
-		"    -l [enable/disable loop]             (default: value in source audio or false)\n"
-		"    -s [loop start sample]               (default: value in source audio or 0)\n"
-		"    -t [loop start timestamp]            (default: value in source audio or 0)\n"
-		"    -e [loop end sample / total samples] (default: number of samples in source file)\n"
-		"    -f [loop end timestamp / total time] (default: length of source audio)\n"
-		"    -v [master volume of sequence]       (default: 127)\n"
-		"    -c [mute scale of sequence]          (default: 63)\n"
-		"    -m                                   (set all sequence channels to mono)\n"
+        "Usage: " + parsedExeName + " <input audio file> [optional arguments]\n"
+        "\n"
+        "OPTIONAL ARGUMENTS\n"
+        "    -o [output filenames]                (default: same as input, not including extension)\n"
+        "    -r [sample rate]                     (default: same as source file (affects playback speed))\n"
+        "    -R [resample rate]                   (default: same as source file (affects internal resolution))\n"
+        "    -l [enable/disable loop]             (default: value in source audio or false)\n"
+        "    -s [loop start sample]               (default: value in source audio or 0)\n"
+        "    -t [loop start timestamp]            (default: value in source audio or 0)\n"
+        "    -e [loop end sample / total samples] (default: number of samples in source file)\n"
+        "    -f [loop end timestamp / total time] (default: length of source audio)\n"
+        "    -c [number of channels in sequence]  (default: same as source file)\n"
+        "    -u [mute scale of sequence]          (default: 63)\n"
+        "    -v [master volume of sequence]       (default: 127)\n"
+        "    -m                                   (set all sequence channels to mono)\n"
         "    -x                                   (don't generate stream files)\n"
         "    -y                                   (don't generate sequence file)\n"
         "    -z                                   (don't generate soundbank file)\n"
-		"    -h                                   (show help text)\n"
-		"\n"
-		"USAGE EXAMPLES\n"
-		"    " + parsedExeName + " inputfile.wav -o custom_outfiles -s 158462 -e 7485124\n"
-		"    " + parsedExeName + " \"spaces not recommended.wav\" -l 1 -f 1:35.23\n"
-		"    " + parsedExeName + " inputfile.brstm -l false -e 0x10000\n"
-		"    " + parsedExeName + " inputfile.mp3 -R 32000 -t 0\n"
-		"    " + parsedExeName + " custom_soundeffect.wav -y -z\n"
-		"\n"
-		"Note: " + parsedExeName + " uses vgmstream to parse audio. You may need to install ffmpeg for certain conversions to be supported.\n\n";
+        "    -h                                   (show help text)\n"
+        "\n"
+        "USAGE EXAMPLES\n"
+        "    " + parsedExeName + " inputfile.wav -o custom_outfiles -s 158462 -e 7485124\n"
+        "    " + parsedExeName + " \"spaces not recommended.wav\" -l 1 -f 1:35.23\n"
+        "    " + parsedExeName + " inputfile.brstm -l false -e 0x10000\n"
+        "    " + parsedExeName + " inputfile.mp3 -R 32000 -t 0\n"
+        "    " + parsedExeName + " custom_soundeffect.wav -y -z\n"
+        "\n"
+        "Note: " + parsedExeName + " uses vgmstream to parse audio. You may need to install ffmpeg for certain conversions to be supported.\n\n";
 
 	printf("%s", print.c_str());
 }
@@ -256,11 +259,16 @@ int parse_input_arguments() {
 		case 'f':
 			set_loop_end_timestamp(arg);
 			break;
+		case 'c':
+			if (seq_set_num_channels(parse_string_to_number(arg))) {
+                channelCountOverride = parse_string_to_number(arg);
+            }
+			break;
+		case 'u':
+			seq_set_mute_scale(parse_string_to_number(arg));
+			break;
 		case 'v':
 			seq_set_master_volume(parse_string_to_number(arg));
-			break;
-		case 'c':
-			seq_set_mute_scale(parse_string_to_number(arg));
 			break;
 		default:
 			return RETURN_INVALID_ARGS;
@@ -304,8 +312,7 @@ int get_vgmstream_properties(const char *inFilename) {
 	}
 
 	// Currently using bitflags to represent channels serves no purpose, but it may be easier to automate for decomp soundbank optimization in the future.
-	for (int i = 0; i < inFileProperties->channels; i++)
-		gInstFlags |= (1 << i);
+    gInstFlags = (1ULL << inFileProperties->channels) - 1ULL;
 
 	printf("...SUCCESS!\n");
 
@@ -320,10 +327,16 @@ void print_seq_channels(uint16_t instFlags) {
 		if (instFlags & (1 << i))
 			numChannels++;
 
+    if (generateSequence && !(generateSoundbank && generateStreams)) {
+        numChannels = channelCountOverride;
+    }
+
 	printf("\n");
 
 	printf("    Number of Channels: %d", numChannels);
-	if (!forcedMono) {
+    if (channelCountOverride != 0 && channelCountOverride != numChannels) {
+        printf(" (Sequence: %d)", channelCountOverride);
+	} else if (!forcedMono) {
 		if (numChannels == 1)
 			printf(" (mono)");
 		else if (numChannels == 2)
@@ -395,7 +408,7 @@ int main(int argc, char **argv) {
 
 	close_vgmstream(inFileProperties);
 
-	if (!generateStreams && !generateSequence && !generateSoundbank)
+	if (!(generateStreams || generateSequence || generateSoundbank))
 		printf("No files to generate!\n");
 
 	return ret;

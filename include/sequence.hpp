@@ -79,6 +79,8 @@ public:
 	void write_trk_header(FILE *seqFile);
 };
 
+uint8_t seq_get_num_channels();
+bool seq_set_num_channels(int64_t numChannels);
 void seq_set_mute_scale(int64_t muteScale);
 void seq_set_master_volume(int64_t volume);
 

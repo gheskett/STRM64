@@ -327,7 +327,7 @@ void print_seq_channels(uint16_t instFlags) {
 		if (instFlags & (1 << i))
 			numChannels++;
 
-    if (generateSequence && !(generateSoundbank && generateStreams)) {
+    if (channelCountOverride != 0 && (generateSequence && !(generateSoundbank && generateStreams))) {
         numChannels = channelCountOverride;
     }
 
@@ -344,6 +344,11 @@ void print_seq_channels(uint16_t instFlags) {
 
 	}
 	printf("\n");
+
+    string timestamp = seq_get_duration_print();
+    if (timestamp.size() > 0) {
+	    printf("    Sequence Duration: %s\n", timestamp.c_str());
+    }
 
 	printf("\n");
 }
@@ -387,9 +392,8 @@ int main(int argc, char **argv) {
 		return ret;
 	}
 
-	if (generateStreams)
-		ret = generate_new_streams(inFileProperties, newFilename, argv[1]);
-	else
+	ret = generate_new_streams(inFileProperties, newFilename, argv[1], generateStreams);
+	if (!ret && !generateStreams)
 		print_seq_channels(gInstFlags);
 
 	if (generateSequence) {

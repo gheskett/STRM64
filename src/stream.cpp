@@ -33,6 +33,8 @@ static int64_t ovrdLoopEndMicro = INT64_MAX;
 
 static uint32_t gFileSize = 0;
 
+static long double gSequenceTimestamp = -1.0;
+
 
 AudioOutData::AudioOutData(VGMSTREAM *inFileProperties) {
 	resample = (ovrdResampleRate > 0 ? true : false);
@@ -64,32 +66,36 @@ AudioOutData::~AudioOutData() {
 
 }
 
-
-string AudioOutData::samples_to_us_print(uint64_t sampleOffset) {
-	uint64_t convTime = (uint64_t) (((long double) sampleOffset / (long double) resampledSampleRate) * 1000000.0 + 0.5);
-
+// Converts duration in microseconds into a timestamp string
+string print_timestamp(uint64_t microseconds) {
 	char buf[64];
-	if (convTime >= 3600000000) {
+
+	if (microseconds >= 3600000000) {
 		sprintf(buf, "%d:%02d:%02d.%06d",
-			(int) (convTime / 3600000000),
-			(int) (convTime / 60000000) % 60,
-			(int) (convTime / 1000000) % 60,
-			(int) (convTime % 1000000));
+			(int) (microseconds / 3600000000),
+			(int) (microseconds / 60000000) % 60,
+			(int) (microseconds / 1000000) % 60,
+			(int) (microseconds % 1000000));
 	}
-	else if (convTime >= 60000000) {
+	else if (microseconds >= 60000000) {
 		sprintf(buf, "%d:%02d.%06d",
-			(int) (convTime / 60000000),
-			(int) (convTime / 1000000) % 60,
-			(int) (convTime % 1000000));
+			(int) (microseconds / 60000000),
+			(int) (microseconds / 1000000) % 60,
+			(int) (microseconds % 1000000));
 	}
 	else {
 		sprintf(buf, "%d.%06d",
-			(int) (convTime / 1000000),
-			(int) (convTime % 1000000));
+			(int) (microseconds / 1000000),
+			(int) (microseconds % 1000000));
 	}
 
 	string ret = buf;
 	return ret;
+}
+
+// Converts sample count to microseconds
+int64_t samples_to_us(uint64_t sampleOffset, uint64_t sampleRate) {
+	return (uint64_t) (((long double) sampleOffset / (long double) sampleRate) * 1000000.0 + 0.5);
 }
 
 // Calculates time duration to use in microseconds (string to int64_t)
@@ -171,19 +177,28 @@ void AudioOutData::print_header_info() {
 		printf("true\n");
 
 		printf("    Starting Loop Point: %d Samples (Time: %s)\n", resampledLoopStartSamples,
-			samples_to_us_print(resampledLoopStartSamples).c_str());
+			print_timestamp(samples_to_us(resampledLoopStartSamples, resampledSampleRate)).c_str());
 
 		printf("    Ending Loop Point: %d Samples (Time: %s)\n", resampledLoopEndSamples,
-			samples_to_us_print(resampledLoopEndSamples).c_str());
-	}
-	else {
+			print_timestamp(samples_to_us(resampledLoopEndSamples, resampledSampleRate)).c_str());
+	} else {
 		printf("false\n");
 
 		int32_t samplesPadded = resampledNumSamples;
 		if (samplesPadded % SAMPLE_COUNT_PADDING)
 			samplesPadded += SAMPLE_COUNT_PADDING - (samplesPadded % SAMPLE_COUNT_PADDING);
 		printf("    End of Stream: %d Samples (Time: %s)\n", samplesPadded,
-			samples_to_us_print(samplesPadded).c_str());
+			print_timestamp(samples_to_us(samplesPadded, resampledSampleRate)).c_str());
+	}
+
+	if (gSequenceTimestamp >= 0.0) { // If looping only
+		printf("    Miniseq Duration (For SFX): ");
+		int64_t duration = ceil(gSequenceTimestamp);
+		if (duration > 0x7FFF) {
+			printf("N/A (Too long!)\n");
+		} else {
+			printf("0x%x\n", (uint32_t) duration);
+		}
 	}
 
 	uint8_t seqChannelCount = seq_get_num_channels();
@@ -202,6 +217,25 @@ void AudioOutData::print_header_info() {
 	printf("\n");
 }
 
+
+void AudioOutData::set_sequence_duration_120bpm() {
+	int32_t sampleCount;
+
+	if (!enableLoop) {
+		sampleCount = resampledNumSamples;
+		if (sampleCount % SAMPLE_COUNT_PADDING)
+			sampleCount += SAMPLE_COUNT_PADDING - (sampleCount % SAMPLE_COUNT_PADDING);
+	} else {
+		// sampleCount = resampledLoopEndSamples; // Old code left just in case we care about the looping timestamp in the future for some reason
+		return;
+	}
+
+	// Get sequence duration in update count; this assumes 48 tatums per beat at 120 BPM initially.
+	// Simplifies to time in seconds * 96. Ceiling of value should be used if no additional computation is needed.
+	gSequenceTimestamp = (long double) sampleCount / (long double) resampledSampleRate * (120.0 * 48.0 / 60.0);
+
+	seq_set_timestamp_duration(gSequenceTimestamp);
+}
 
 void set_sample_rate(int64_t sampleRate) {
 	if (sampleRate <= 0) {
@@ -926,9 +960,9 @@ int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename,
 	return RETURN_SUCCESS;
 }
 
-int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename, string oldFilename) {
+int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename, string oldFilename, bool shouldGenerateFiles) {
 	if (!inFileProperties)
-		return 1;
+		return RETURN_INVALID_INPUT_FILE;
 
 	AudioOutData *audioData = new AudioOutData(inFileProperties);
 
@@ -937,7 +971,11 @@ int generate_new_streams(VGMSTREAM *inFileProperties, string newFilename, string
 		delete audioData;
 		return ret;
 	}
-	ret = audioData->write_streams(inFileProperties, newFilename, oldFilename);
+	
+	audioData->set_sequence_duration_120bpm();
+
+	if (shouldGenerateFiles)
+		ret = audioData->write_streams(inFileProperties, newFilename, oldFilename);
 
 	delete audioData;
 	return ret;

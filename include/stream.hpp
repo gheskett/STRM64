@@ -29,8 +29,8 @@ class AudioOutData {
 public:
 	AudioOutData(VGMSTREAM *inFileProperties);
 	~AudioOutData();
-    std::string samples_to_us_print(uint64_t sampleOffset);
     void print_header_info();
+    void set_sequence_duration_120bpm();
     int check_properties(VGMSTREAM *inFileProperties, std::string newFilename);
     void calculate_aiff_file_size();
     void write_form_header(FILE *streamFile);
@@ -47,8 +47,8 @@ public:
     void write_audio_data(VGMSTREAM *inFileProperties, FILE **streamFiles);
     int write_streams(VGMSTREAM *inFileProperties, std::string newFilename, std::string oldFilename);
 };
-		
-int generate_new_streams(VGMSTREAM *inFileProperties, std::string newFilename, std::string oldFilename);
+
+int generate_new_streams(VGMSTREAM *inFileProperties, std::string newFilename, std::string oldFilename, bool shouldGenerateFiles);
 void set_sample_rate(int64_t sampleRate);
 void set_resample_rate(int64_t resampleRate);
 void set_enable_loop(int64_t isLoopingEnabled);
@@ -56,6 +56,8 @@ void set_loop_start_samples(int64_t samples);
 void set_loop_end_samples(int64_t samples);
 void set_loop_start_timestamp(std::string arg);
 void set_loop_end_timestamp(std::string arg);
+std::string print_timestamp(uint64_t microseconds);
+int64_t samples_to_us(uint64_t sampleOffset, uint64_t sampleRate);
 int64_t timestamp_to_us(std::string dur);
 
 #endif

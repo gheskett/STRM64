@@ -3,23 +3,29 @@
 
 #include "main.hpp"
 #include "sequence.hpp"
+#include "stream.hpp"
 
 using namespace std;
 
+
+#define TIMESTAMP_DELAY 6 // NOTE: Cannot be less than 1
+#define MAX_DURATION (0x7FFF - TIMESTAMP_DELAY) // NOTE: Must be a bit less than max int64_t value, as additional timestamps are tacked on to the end of this.
 
 #define MUTE_SCALE_DEFAULT 0x3F
 #define MASTER_VOLUME_DEFAULT 0x7F
 
 // These must be changed when manually adding/removing fields
-#define SEQ_HEADER_SIZE 0x19 // Exclusive of Channel Pointer commands
+#define SEQ_HEADER_SIZE 0x17 // Exclusive of looping branch and Channel Pointer commands
 #define CHN_HEADER_SIZE 0x13
-#define TRK_HEADER_SIZE 0x09
+#define TRK_HEADER_SIZE 0x0A
 #define ABS_PTR_SIZE 0x03
 
 
 static uint8_t gNumChannels = 0;
 static int8_t gMuteScale = MUTE_SCALE_DEFAULT;
 static uint8_t gMasterVolume = MASTER_VOLUME_DEFAULT;
+static uint8_t gTempo = 0;
+static int16_t gTimestamp = -1;
 
 static string warnings = "";
 
@@ -79,6 +85,37 @@ SEQFile::~SEQFile() {
 	delete[] chnHeader;
 }
 
+string seq_get_duration_print() {
+	if (gTimestamp < 0)
+		return "";
+
+	if (gTempo == 0)
+		gTempo = 1;
+
+	// Timestamp * 60 seconds / (BPM * tatums per beat), result in microseconds
+	return print_timestamp(1000000 * (uint64_t) gTimestamp * 60 / (48 * (uint64_t) gTempo));
+}
+
+void seq_set_timestamp_duration(long double duration120BPM) {
+	gTempo = 120;
+	if (ceil(duration120BPM) <= MAX_DURATION) {
+		gTimestamp = (int16_t) ceil(duration120BPM);
+		return;
+	}
+
+	gTempo = (120 * MAX_DURATION) / duration120BPM;
+
+	if (gTempo < 1)
+		gTempo = 1;
+
+	int64_t newDuration = ceil((long double) (duration120BPM * gTempo) / 120.0);
+	if (newDuration > MAX_DURATION) {
+		newDuration = MAX_DURATION;
+	}
+
+	gTimestamp = newDuration;
+}
+
 uint8_t seq_get_num_channels() {
 	return gNumChannels;
 }
@@ -117,8 +154,7 @@ void seq_set_master_volume(int64_t volume) {
 	gMasterVolume = (uint8_t) volume;
 }
 
-void SEQHeader::write_seq_header(FILE *seqFile) {
-	uint16_t seqHeaderSize = (uint16_t) (SEQ_HEADER_SIZE + this->channelCount * ABS_PTR_SIZE); // Size of SEQ header
+void SEQHeader::write_seq_header(FILE *seqFile, uint16_t seqHeaderSize) {
 	uint8_t *header = new uint8_t[seqHeaderSize]; // Data buffer for temporary storage before printing
 	size_t headerPtr = 0; // Initialize data pointer to 0
 
@@ -167,29 +203,40 @@ void SEQHeader::write_seq_header(FILE *seqFile) {
 	 * The chosen values are somewhat arbitrary, but they seem to work well enough without causing noticeable audio latency in the process.
 	 */
 
-	// Set tempo to 0x30
+	// Set tempo to 0x30 (arbitrary value, but it works well enough)
 	header[headerPtr++] = SEQ_TEMPO;
 	header[headerPtr++] = 0x30;
 
-	// Wait for 6 audio ticks to pass
-	header[headerPtr++] = SEQ_TIMESTAMP;
-	header[headerPtr++] = 0x06;
+	// Wait for TIMESTAMP_DELAY audio ticks to pass
+	header[headerPtr++] = SEQ_TIMESTAMP; // NOTE: This does not need to be 3 bytes, but is less likely to break if TIMESTAMP_DELAY is set to a huge value.
+	header[headerPtr++] = (uint8_t) ((uint16_t) TIMESTAMP_DELAY >> 8) | 0x80;
+	header[headerPtr++] = (uint8_t) ((uint16_t) TIMESTAMP_DELAY & 0xFF);
 
-	// Set tempo to 0x00 (SM64 only allows a minimum tempo of 1 in vanilla, but this value will still be compatible. Modding it to support a tempo of 0 is very easy and recommended, but not that important.)
+	// Set tempo (SM64 only allows a minimum tempo of 1 in vanilla, but this value will still be compatible. Modding it to support a tempo of 0 is very easy and recommended, but not that important.)
 	header[headerPtr++] = SEQ_TEMPO;
-	header[headerPtr++] = 0x00;
+	if (gTimestamp >= 0) // If not looping
+		header[headerPtr++] = gTempo;
+	else
+		header[headerPtr++] = 0x00;
 
 	// Wait for ideally an indefinite amount of time (or at least as indefinite as possible)
 	header[headerPtr++] = SEQ_TIMESTAMP;
-	header[headerPtr++] = 0xFF;
-	header[headerPtr++] = 0xF9;
+	if (gTimestamp >= 0) {
+		header[headerPtr++] = (uint8_t) ((uint16_t) gTimestamp >> 8) | 0x80;
+		header[headerPtr++] = (uint8_t) ((uint16_t) gTimestamp & 0xFF);
+	} else {
+		header[headerPtr++] = (uint8_t) ((uint16_t) MAX_DURATION >> 8) | 0x80;
+		header[headerPtr++] = (uint8_t) ((uint16_t) MAX_DURATION & 0xFF);
+	}
 
-	/* Almost everything past this point is unnecessary given the above timestamp, but still here just in case. */
+	/* Almost everything past this point is unnecessary if looping, but still here just in case. */
 
 	// Loop back to channel pointers. If adding/removing anything from this header, the following value should be updated accordingly.
-	header[headerPtr++] = SEQ_BRANCH_ABS_ALWAYS;
-	header[headerPtr++] = 0x00;
-	header[headerPtr++] = 0x09;
+	if (gTimestamp < 0) {
+		header[headerPtr++] = SEQ_BRANCH_ABS_ALWAYS; // Loop sequence to address of first channel pointer
+		header[headerPtr++] = 0x00;
+		header[headerPtr++] = 0x09;
+	}
 
 	// The sequence has ended, disable all channels that were being used. This will in theory never get called unless removing the branch command.
 	header[headerPtr++] = SEQ_CHANNEL_DISABLE;
@@ -212,10 +259,9 @@ void SEQHeader::write_seq_header(FILE *seqFile) {
 	delete[] header;
 }
 
-void CHNHeader::write_chn_header(FILE *seqFile, uint8_t channelCount) {
+void CHNHeader::write_chn_header(FILE *seqFile, uint8_t channelCount, uint16_t seqHeaderSize) {
 	uint8_t *header = new uint8_t[CHN_HEADER_SIZE]; // Data buffer for temporary storage before printing
 	size_t headerPtr = 0; // Initialize data pointer to 0
-	uint16_t seqHeaderSize = (uint16_t) (SEQ_HEADER_SIZE + channelCount * ABS_PTR_SIZE); // Size of SEQ header
 
 	// Calculate track pointer offset
 	uint16_t trackPtr = (uint16_t) (seqHeaderSize + CHN_HEADER_SIZE * channelCount);
@@ -253,8 +299,13 @@ void CHNHeader::write_chn_header(FILE *seqFile, uint8_t channelCount) {
 
 	// Set channel timestamp to ideally an indefinite amount of time (or at least as indefinite as possible)
 	header[headerPtr++] = CHN_TIMESTAMP;
-	header[headerPtr++] = 0xFF;
-	header[headerPtr++] = 0xFF;
+	if (gTimestamp >= 0) {
+		header[headerPtr++] = (uint8_t) ((uint16_t) (gTimestamp + TIMESTAMP_DELAY) >> 8) | 0x80;
+		header[headerPtr++] = (uint8_t) ((uint16_t) (gTimestamp + TIMESTAMP_DELAY) & 0xFF);
+	} else {
+		header[headerPtr++] = (uint8_t) ((uint16_t) (MAX_DURATION + TIMESTAMP_DELAY) >> 8) | 0x80;
+		header[headerPtr++] = (uint8_t) ((uint16_t) (MAX_DURATION + TIMESTAMP_DELAY) & 0xFF);
+	}
 
 	// End of channel header
 	header[headerPtr++] = CHN_END_OF_DATA;
@@ -282,12 +333,18 @@ void SEQFile::write_trk_header(FILE *seqFile) {
 
 	// Wait 5 game ticks to play note. See description in `write_seq_header` for more details.
 	data[dataPtr++] = TRK_TIMESTAMP;
-	data[dataPtr++] = 0x05;
+	data[dataPtr++] = (uint8_t) ((uint16_t) (TIMESTAMP_DELAY - 1) >> 8) | 0x80;
+	data[dataPtr++] = (uint8_t) ((uint16_t) (TIMESTAMP_DELAY - 1) & 0xFF);
 
 	// Play note with timestamp and velocity 
 	data[dataPtr++] = TRK_NOTE_TV + 0x27; // Middle C
-	data[dataPtr++] = 0xFF; // Timestamp first byte
-	data[dataPtr++] = 0xFA; // Timestamp second byte
+	if (gTimestamp >= 0) {
+		data[dataPtr++] = (uint8_t) ((uint16_t) (gTimestamp + 1) >> 8) | 0x80;
+		data[dataPtr++] = (uint8_t) ((uint16_t) (gTimestamp + 1) & 0xFF);
+	} else {
+		data[dataPtr++] = (uint8_t) ((uint16_t) (MAX_DURATION + 1) >> 8) | 0x80;
+		data[dataPtr++] = (uint8_t) ((uint16_t) (MAX_DURATION + 1) & 0xFF);
+	}
 	data[dataPtr++] = 0x7F; // Velocity
 
 	// End of track data
@@ -327,10 +384,15 @@ int SEQFile::write_sequence() {
 
 	warnings = "";
 
-	this->seqhead->write_seq_header(seqFile);
+	uint16_t seqHeaderSize = (uint16_t) (SEQ_HEADER_SIZE + channelCount * ABS_PTR_SIZE); // Size of SEQ header
+	if (gTimestamp < 0) { // If looping
+		seqHeaderSize += 3;
+	}
+
+	this->seqhead->write_seq_header(seqFile, seqHeaderSize);
 
 	for (size_t i = 0; i < this->channelCount; i++) {
-		this->chnHeader[i]->write_chn_header(seqFile, this->channelCount);
+		this->chnHeader[i]->write_chn_header(seqFile, this->channelCount, seqHeaderSize);
 	}
 
 	write_trk_header(seqFile);

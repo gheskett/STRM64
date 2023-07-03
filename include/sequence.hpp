@@ -49,7 +49,7 @@ public:
 	SEQHeader(uint16_t instFlags, uint8_t numChannels);
 	~SEQHeader();
 
-	void write_seq_header(FILE *seqFile);
+	void write_seq_header(FILE *seqFile, uint16_t seqHeaderSize);
 };
 
 class CHNHeader {
@@ -61,7 +61,7 @@ public:
 	CHNHeader(uint8_t channelIndex, uint8_t instId, uint8_t numChannels);
 	~CHNHeader();
 
-	void write_chn_header(FILE *seqFile, uint8_t channelCount);
+	void write_chn_header(FILE *seqFile, uint8_t channelCount, uint16_t seqHeaderSize);
 };
 
 class SEQFile {
@@ -79,6 +79,8 @@ public:
 	void write_trk_header(FILE *seqFile);
 };
 
+std::string seq_get_duration_print();
+void seq_set_timestamp_duration(long double duration120BPM);
 uint8_t seq_get_num_channels();
 bool seq_set_num_channels(int64_t numChannels);
 void seq_set_mute_scale(int64_t muteScale);

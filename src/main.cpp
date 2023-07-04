@@ -295,7 +295,7 @@ int get_vgmstream_properties(const char *inFilename) {
 		fclose(invalidFile);
 
 		printf("...FAILED!\nERROR: Input file is not a valid audio file!\nIf you believe this is a fluke, please make sure you have the proper audio libraries installed.\n");
-		printf("Alternatively, you can convert the input file to WAV separately and try again.\n");
+		printf("Alternatively, you can convert the input file to WAV (16-bit) separately and try again.\n");
 		return RETURN_INVALID_INPUT_FILE;
 	}
 

@@ -99,17 +99,23 @@ string seq_get_duration_print() {
 void seq_set_timestamp_duration(long double duration120BPM) {
 	gTempo = 120;
 	if (ceil(duration120BPM) <= MAX_DURATION) {
+		// No tempo change needed from 120 BPM, grab value ceiling and return
 		gTimestamp = (int16_t) ceil(duration120BPM);
 		return;
 	}
 
 	gTempo = (120 * MAX_DURATION) / duration120BPM;
 
-	if (gTempo < 1)
-		gTempo = 1;
+	if (gTempo < 1) {
+		// Too long, just play sequence file forever (tbf the music needs to be over 11 hours long for this to happen)
+		gTempo = 0;
+		gTimestamp = -1;
+		return;
+	}
 
-	int64_t newDuration = ceil((long double) (duration120BPM * gTempo) / 120.0);
+	int64_t newDuration = ceil(duration120BPM * gTempo / 120.0);
 	if (newDuration > MAX_DURATION) {
+		printf("FATAL WARNING: Miscalculation in seq_set_timestamp_duration function!\n");
 		newDuration = MAX_DURATION;
 	}
 

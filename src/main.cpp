@@ -35,8 +35,8 @@
  *	STRM64 custom_soundeffect.wav -y -z
  *
  * Note: STRM64 uses vgmstream to parse audio. You may need to install ffmpeg for certain conversions to be supported.
- * For the Windows build of this application, the bundled dlls are mandatory for this program to run.
- * You may need also to find additional dlls and add them to the folder (Windows) or install additional libraries such as ffmpeg to run the build (Linux).
+ * For the Windows build of this application, the bundled DLLs are mandatory for this program to run.
+ * You may need also to find additional DLLs and add them to the folder (Windows) or install additional libraries such as ffmpeg to run the build (Linux).
  *
  */
 

@@ -913,7 +913,7 @@ int AudioOutData::write_streams(VGMSTREAM *inFileProperties, string newFilename,
 				suffix += "_R";
 			}
 		} else if (numChannels != 1) {
-			suffix += '_' + get_num_to_hex((uint8_t) i);
+			suffix += string("_") + get_num_to_hex((uint8_t) i);
 		}
 
 		string finalFilename = newFilename + suffix + ".aiff";

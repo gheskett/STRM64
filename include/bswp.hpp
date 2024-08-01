@@ -1,6 +1,8 @@
 #ifndef BSWP_HPP
 #define BSWP_HPP
 
+#include <stdint.h>
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
 
 #include <stdlib.h>

@@ -2,6 +2,7 @@
 #define STREAM_HPP
 
 #include <string>
+#include <stdint.h>
 
 extern "C" {
 #include "vgmstream.h"

@@ -2,6 +2,7 @@
 #define SEQUENCE_HPP
 
 #include <string>
+#include <stdint.h>
 
 enum SEQCommands {
 	SEQ_CHANNEL_POINTER = 0x90, // 0x90-0x9F
